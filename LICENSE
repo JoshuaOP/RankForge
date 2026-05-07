@@ -1,20 +1,21 @@
-**Copyright (c) 2026 JoshuaOP**
-1. GRANT OF LICENSE
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software, including the RankForge source code, associated files and all related documentation (the "Software"), to deal in the Software without restriction. This includes, without limitation, the rights to:
-Use and Execute: Run the software on any private or public Minecraft server.
-Modify and Adapt: Change the Java source code or configuration structures to fit specific server needs.
-Merge and Publish: Combine this software with other plugins or libraries.
-Distribute and Sublicense: Give or sell copies of the software to others, provided the conditions below are met.
-2. CONDITIONS & ATTRIBUTION
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-Any forks or redistributions of the RankForge source code must maintain the original "Developed by JoshuaOP" credits in the file headers and read.md.
-If the Software is integrated into a larger plugin suite, credit to the original author must be visible in the documentation or /version command output.
-3. DISCLAIMER OF WARRANTY
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
-4. LIMITATION OF LIABILITY
-IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS (JoshuaOP) BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. THIS INCLUDES, BUT IS NOT LIMITED TO:
-Data loss or corruption (e.g., ranks.yml or playerdata errors).
-Server downtime or performance issues.
-Conflicts with third-party plugins (e.g., Vault, LuckPerms).
-5. TERMINATION
-This license is effective until terminated. Your rights under this license will terminate automatically without notice from the author if you fail to comply with any term(s) of this license. Upon termination, you shall cease all use of the Software and destroy all copies, full or partial, of the Software.
+MIT License
+
+Copyright (c) 2026 JoshuaOP
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
