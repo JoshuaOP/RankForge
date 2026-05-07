@@ -1,63 +1,93 @@
-# 🛡️ RankForge
+# 🛡️ RankForge (Beta)
 **A Professional Rank Progression System for Minecraft Servers**
-
-RankForge is a high-performance, feature-rich plugin designed for Spigot and Paper servers. It provides a cinematic and interactive way for players to advance through ranks (A, B, C, D) using a live-tracking GUI and immersive celebration effects.
-
----
-
+RankForge is a high-performance, feature-rich plugin designed for Spigot and Paper servers. It provides a cinematic and interactive way for players to advance through ranks using a live-tracking GUI and immersive celebration effects.
 ## ✨ Key Features
-
 ### 🎬 The Rank-Up Spectacle
 Celebration is part of the progression! Every rank-up triggers:
-* **Dynamic Titles:** Custom titles and subtitles flash on the player's screen.
-* **Audio Feedback:** Triumphant sound effects (configurable via config).
-* **Pyrotechnics:** Automatic fireworks spawned at the player's feet upon success.
-
+ * **Dynamic Feedback:** Configurable sound effects (success/failure/cancel) with adjustable pitch.
+ * **Pyrotechnics:** Automatic fireworks spawned at the player's location upon successful forging.
+ * **Global Announcements:** Server-wide broadcast system to celebrate player achievements.
 ### 📊 Premium Dynamic GUI
 A live dashboard that tracks requirements in real-time:
-* **Requirement Checklist:** Scans inventory and balance automatically.
-* **Live Progress:** Shows `(Current/Total)` for money, EXP, and items (e.g., `10/16 Iron Ingots`).
-* **Visual Status:** Status icons (✔/✘) and enchanted glows for available ranks.
-* **Clean Formatting:** Currency is formatted with commas (e.g., $15,000).
-
+ * **Profile Header:** A dynamic Player Head showing the user's skin, current rank, and balance.
+ * **Anti-Skip Logic:** Enforces linear progression (A → B → C) to ensure a balanced economy.
+ * **Status Tracking:** Automatically identifies if a rank is Owned, Available, Locked, or Missing Resources.
+ * **Adaptive Layout:** The GUI scales based on row configuration and centers the profile head automatically.
 ### 🛠️ Core Engine
-* **LuckPerms Sync:** Automatically updates player groups using the LP command engine.
-* **Smart Requirements:** Supports Money (Vault), EXP Levels, and multiple Item types.
-* **Error Handling:** Gracefully handles typos in material names and sound configurations.
-
----
-
-## 📋 Commands
-
+ * **LuckPerms Sync:** Automatically updates player groups using the LP command engine.
+ * **Smart Requirements:** Supports Money (Vault), and multiple Item types.
+ * **Custom Artifact Support:** Scans for items with specific custom display names, perfect for RPG or unique server items.
+## 📋 Commands & Permissions
 | Command | Description | Permission |
-| :--- | :--- | :--- |
-| `/rank` | Opens the Rank Progression GUI. | `rankforge.use` |
-| `/rank help` | Displays user help tips. | `rankforge.use` |
-| `/rf reload` | Reloads configurations. | `rankforge.admin` |
-| `/rf set <player> <rank>` | Manually sets a player's rank. | `rankforge.admin` |
-| `/rf reset <player>` | Resets player to Rank A. | `rankforge.admin` |
+|---|---|---|
+| /ranks | Opens the main Rank Progression GUI. | rankforge.use |
+| /rf help | Displays administrative help tips. | rankforge.admin |
+| /rf reload | Reloads all configurations instantly. | rankforge.admin |
+| /rf set <p> <r> | Manually sets a player's rank. | rankforge.admin |
+| /rf create <id> | Generates a new rank template in ranks.yml. | rankforge.admin |
+## ⚙️ Configuration Files
+### ranks.yml
+*Manages the hierarchy and specific rank properties.*
+```yaml
+rank-order:
+  - "default"
+  - "member"
+  - "vip"
 
----
+ranks:
+  member:
+    prefix: "&f[Member] "
+    requirements:
+      money: 1000
+      items:
+        - "IRON_INGOT:16"
+    gui:
+      material: "IRON_INGOT"
+      slot: 10
+      name: "&f&lMEMBER"
+      lore:
+        - "&7Status: {status}"
+    commands:
+      - "lp user {player} parent set member"
 
-## 💡 Help & Development Tips
+```
+### config.yml
+*Global settings and aesthetic effects.*
+```yaml
+lang: "en.yml"
+storage-type: "YAML"
 
-### 1. The Rank Chain
-Ensure your `ranks.yml` defines the sequence correctly using the `next-rank` node.
-* *Example:* Rank `a` → `next-rank: "b"`. Rank `b` → `next-rank: "c"`.
+effects:
+  sounds:
+    success: "UI_TOAST_CHALLENGE_COMPLETE"
+    success-pitch: 1.2
+    failure: "ENTITY_VILLAGER_NO"
+  fireworks:
+    enabled: true
+    type: "BALL_LARGE"
+    colors: ["GOLD", "WHITE"]
 
-### 2. Item Material Names
-Use official **Bukkit Material** names (e.g., `IRON_INGOT`, `DIAMOND_BLOCK`). Incorrect names will default to `PAPER` to prevent crashes.
+gui:
+  title: "&6&lRankForge"
+  rows: 3
+  stats-head:
+    slot: 4
 
-### 3. Social Prestige
-Ensure your LuckPerms groups match your Rank IDs (`a`, `b`, `c`, `d`). The plugin runs `lp user <name> parent set <rankID>` automatically.
+```
+### messages/en.yml
+*Customizable language and notification system.*
+```yaml
+prefix: "&6&lRankForge &8» "
+notifications:
+  broadcast-purchase: "&6&lRankForge &8» &f{player} &7has forged the {prefix} &7rank!"
+  rank-skip: "&c&lWAIT! &7You must purchase the previous rank first."
+  rank-already-owned: "&eYou already own this rank!"
 
----
-
-## 🔧 Installation
-1. Drop `RankForge.jar` into your `/plugins` folder.
-2. Ensure **Vault**, **LuckPerms**, and an Economy plugin (like EssentialsX) are installed.
-3. Restart the server to generate configurations.
-4. Customize `ranks.yml` and run `/rf reload`.
-
----
-*Developed with ❤️ by JoshuaOP*
+```
+## 🚀 Installation & Usage
+ 1. **Dependencies:** Ensure **Vault** and **LuckPerms** are installed.
+ 2. **Setup:** Drop RankForge.jar into your /plugins/ folder and restart the server.
+ 3. **Ordering:** Always define your rank sequence in the rank-order list inside ranks.yml.
+ 4. **Custom Items:** To require a specific named item, use the format: MATERIAL:AMOUNT:DISPLAY_NAME (e.g., GOLD_INGOT:1:&6Ancient Coin).
+ 5. **Synchronization:** Ensure your LuckPerms groups match the Rank IDs used in your configuration.
+*Developed by **JoshuaOP***
