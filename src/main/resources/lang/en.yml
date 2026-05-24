@@ -1,0 +1,72 @@
+prefix: "§6RankForge §8»"
+
+messages:
+  # General
+  no_permission: "%prefix% §cYou don't have permission!"
+  player_only: "%prefix% §cThis command is for players only!"
+  player_not_found: "%prefix% §cPlayer §e%player% §cnot found!"
+  reload_success: "%prefix% §aPlugin reloaded successfully!"
+
+  # Rank
+  rankup_success: "%prefix% §aYou ranked up to §e%rank%§a!"
+  rankup_fail: "%prefix% §cYou don't meet the requirements!"
+  rankup_max: "%prefix% §eYou are already at the maximum rank!"
+  rank_set_success: "%prefix% §aRank of §e%player% §aset to §e%rank%§a!"
+  rank_reset_success: "%prefix% §aRank of §e%player% §ahas been reset!"
+  rank_force_success: "%prefix% §aForced §e%player% §ato rank §e%rank%§a!"
+
+  # Progress
+  progress_bar: "%prefix% §7Progress: §a%bar% §7(§e%percent%§7%%)"
+  current_rank: "%prefix% §7Your current rank: §e%rank%"
+  next_rank: "%prefix% §7Next rank: §e%rank%"
+  no_next_rank: "%prefix% §6You are at the maximum rank!"
+
+  # Requirements
+  requirements_header: "%prefix% §7Requirements for §e%rank%§7:"
+  requirement_met: "  §a✔ §7%type%: §a%value% §8(met)"
+  requirement_unmet: "  §c✘ §7%type%: §c%value% §8(unmet)"
+
+  # GUI
+  gui_click_fast: "%prefix% §cYou are clicking too fast!"
+  gui_title: "§8✦ §6RankForge §8✦"
+  gui_admin_title: "§8✦ §cAdmin Rank Editor §8✦"
+  gui_drag_title: "§8✦ §bSlot Editor §8✦"
+
+  # Language
+  lang_set: "%prefix% §aLanguage set to §e%lang%§a!"
+  lang_unknown: "%prefix% §cUnknown language: §e%lang%"
+  lang_reset: "%prefix% §aLanguage reset to default."
+  lang_list: "%prefix% §7Available languages: §e%list%"
+
+  # Announcements
+  announce_rankup: "§6✦ §e%player% §ahas ranked up to §6%rank% §a✦"
+
+  # Version
+  version_info: "%prefix% §7Plugin version: §a%version%"
+  version_mc_current: "%prefix% §7Running on §a%mc_version%"
+  version_mc_supported: "%prefix% §aYour server version is fully supported!"
+  version_mc_unsupported: "%prefix% §eYour server version is NOT officially supported!"
+
+  # Editor
+  editor_saved: "%prefix% §aRanks saved to ranks.yml successfully!"
+  editor_reload: "%prefix% §aRanks hot-reloaded from ranks.yml!"
+  editor_rank_moved: "%prefix% §aRank §e%rank% §amoved to slot §e%slot%§a."
+
+  # Security
+  security_status: "%prefix% §7Anti-bypass: §a%bypass% §7| GUI Shield: §a%shield%"
+
+  # Stats
+  stats_header: "%prefix% §7=== System Stats ==="
+  stats_players: "  §7Cached Players: §e%count%"
+  stats_ranks: "  §7Loaded Ranks: §e%count%"
+
+  # Debug
+  debug_info: "%prefix% §7[DEBUG] Rank: §e%rank% §7| DB: §a%db% §7| Lang: §e%lang%"
+
+  # Sounds
+  sound_test: "%prefix% §aPlayed test sound!"
+  sound_reload: "%prefix% §aSounds reloaded!"
+
+  # Top
+  top_header: "%prefix% §7=== Top Ranked Players ==="
+  top_entry: "  §e#%pos% §a%player% §8- §7%rank%"

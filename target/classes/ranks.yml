@@ -1,0 +1,93 @@
+# ============================================================
+#   RankForge - ranks.yml  (v2.0)
+#   Edit ranks here or in-game via /rank editor <rankId>
+#   Hot-reload: /rank editor reload  |  Save: /rank editor save
+# ============================================================
+
+ranks:
+
+  Guest:
+    display-name: "§7Guest"
+    next-rank: "Member"
+    slot: 10
+    material: GRAY_WOOL
+    chat-prefix: "§7[Guest]"
+    permissions: []
+    lore:
+      - "§7Starting rank."
+      - "§8No requirements needed."
+    requirements:
+      money: 0
+      xp-level: 0
+      permission: ""
+    # Commands executed by console when a player reaches this rank
+    # Supports %player% placeholder
+    commands:
+      - "broadcast §a%player% §7has joined the server as §7Guest!"
+
+  Member:
+    display-name: "§aMember"
+    next-rank: "Builder"
+    slot: 12
+    material: GREEN_WOOL
+    chat-prefix: "§a[Member]"
+    permissions: []
+    lore:
+      - "§7Requires: §a$5,000 §7& §aLevel 10"
+    requirements:
+      money: 5000
+      xp-level: 10
+      permission: ""
+    commands:
+      - "broadcast §6✦ §e%player% §ahas ranked up to §aMember§a! ✦"
+      - "title %player% subtitle {\"text\":\"You are now Member!\",\"color\":\"green\"}"
+
+  Builder:
+    display-name: "§9Builder"
+    next-rank: "Expert"
+    slot: 14
+    material: BLUE_WOOL
+    chat-prefix: "§9[Builder]"
+    permissions: []
+    lore:
+      - "§7Requires: §a$15,000 §7& §aLevel 25"
+    requirements:
+      money: 15000
+      xp-level: 25
+      permission: ""
+    commands:
+      - "broadcast §6✦ §e%player% §9ranked up to §9Builder§9! ✦"
+
+  Expert:
+    display-name: "§6Expert"
+    next-rank: "Elite"
+    slot: 16
+    material: ORANGE_WOOL
+    chat-prefix: "§6[Expert]"
+    permissions: []
+    lore:
+      - "§7Requires: §a$50,000 §7& §aLevel 50"
+    requirements:
+      money: 50000
+      xp-level: 50
+      permission: ""
+    commands:
+      - "broadcast §6✦ §e%player% §6ranked up to §6Expert§6! ✦"
+
+  Elite:
+    display-name: "§c§lElite"
+    next-rank: ""
+    slot: 22
+    material: RED_WOOL
+    chat-prefix: "§c[Elite]"
+    permissions: []
+    lore:
+      - "§7Requires: §a$100,000 §7& §aLevel 100"
+      - "§6§l✦ Maximum Rank! ✦"
+    requirements:
+      money: 100000
+      xp-level: 100
+      permission: ""
+    commands:
+      - "broadcast §4✦ §c%player% §6has reached the §c§lMAX rank — Elite§6! ✦"
+      - "give %player% diamond 5"
