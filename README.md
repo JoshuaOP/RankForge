@@ -1,151 +1,428 @@
-# RankForge
-**Version:** 2.0 | **Author:** JoshuaOP | **API:** Spigot/Paper 1.20.1–1.21.x | **Java:** 21, Maven
-## Feature Overview
-| Category | Features |
-|---|---|
-| **Core** | YAML-defined ranks, hot-reload, async backup, immutable RankModel |
-| **GUI** | Animated rank tree, player-head info panel, admin editor, drag-drop slot editor, per-rank detail view, player list + data editor |
-| **Commands** | Per-rank console commands on rank-up (%player%), full admin suite |
-| **Soft Dependencies** | Vault, LuckPerms, PlaceholderAPI — all with live event hooks (no hard dependencies) |
-| **Placeholders** | 30+ %rankforge_xxx% PAPI placeholders + {rankforge_xxx} config format |
-| **Cosmetics** | Particle trails, rank boss bars, tablist formatting, custom join/quit messages |
-| **Performance** | TPS monitor, auto performance mode (HIGH/MEDIUM/LOW), centralized task scheduler |
-| **Caching** | ConcurrentHashMap + TTL expiry, periodic purge, top-player query |
-| **Protection** | RankupQueue (prevents simultaneous processing), RateLimiter, macro detection, anti-bypass |
-| **Storage** | MySQL + HikariCP (optional) — YAML file fallback by default |
-| **ConfigUpdater** | Auto-migrates config/lang files on plugin update — no manual edits needed |
-| **API** | Full public RankForgeAPI for external plugins |
-| **Languages** | en, es, fil, id — per-player preference |
-## Soft Dependency Hooks
-All three soft dependencies are handled by SoftDependency, which also implements Listener for full player lifecycle integration:
-| Plugin | Hook | What it does |
-|---|---|---|
-| **Vault** | Setup on enable | Provides getBalance() / withdraw() for money requirements |
-| **LuckPerms** | PlayerJoinEvent | Grants rank permission nodes to the player on every login |
-| **PlaceholderAPI** | Setup on enable | Registers the %rankforge_xxx% expansion |
-### Player Event Flow
-```
-PlayerJoinEvent (MONITOR priority)
-  ├─ Load player data into cache (from startup YAML load or create defaults)
-  ├─ Refresh player name if changed
-  ├─ Apply rank permissions via LuckPerms (or Bukkit attachment fallback)
-  └─ Restore cosmetics: particle trail + tablist prefix
+# ✦ RankForge
 
-PlayerQuitEvent (MONITOR priority)
-  ├─ Remove cosmetics (boss bar, particle trail, tablist reset)
-  └─ Persist player data to YAML immediately (if MySQL not connected)
+> Production-ready rank management plugin for Spigot/Paper servers with vanilla XP progression, advanced GUIs, crossplay compatibility, and developer APIs.
 
+![Spigot](https://img.shields.io/badge/Spigot-1.20.1--1.21.x-orange)
+![Java](https://img.shields.io/badge/Java-21-blue)
+![Version](https://img.shields.io/badge/Version-3.0-brightgreen)
+![License](https://img.shields.io/badge/License-MIT-lightgrey)
+
+---
+
+## 📚 Table of Contents
+
+- [Overview](#-overview)
+- [Features](#-features)
+- [Requirements](#-requirements)
+- [Installation](#-installation)
+- [Commands](#-commands)
+- [Permissions](#-permissions)
+- [PlaceholderAPI](#-placeholderapi-placeholders)
+- [Configuration](#-configuration)
+- [Player Data](#-player-data)
+- [Crossplay Support](#-crossplay-support)
+- [Developer API](#-developer-api)
+- [Storage](#-storage)
+- [Release Notes](#-release-notes-v30)
+- [Building](#-building)
+- [License](#-license)
+
+---
+
+# 📖 Overview
+
+RankForge is a modern rank progression plugin built for **Spigot/Paper 1.20.1–1.21.x**.
+
+### Designed for:
+
+- Small survival servers
+- Large networks
+- Prison servers
+- Economy servers
+- Crossplay communities
+
+### Core Goals:
+
+- Native vanilla XP progression
+- Highly configurable ranks
+- Production-ready performance
+- Easy administration
+- Developer extensibility
+
+---
+
+# ✨ Features
+
+## Core Systems
+
+- Vanilla Minecraft XP progression
+- YAML + MySQL storage
+- Async processing
+- Auto migrations
+- Rank history tracking
+- Hot reload system
+- Caching optimizations
+
+## GUI Systems
+
+- Animated Rank Tree GUI
+- Search bar support
+- Pagination support
+- Preview mode
+- GUI themes
+- Player data editor
+- Requirement status indicators
+
+## Requirement Types
+
+Supports:
+
+- Money requirements
+- XP requirements
+- Playtime requirements
+- Mob kills
+- Block breaks
+- Permission requirements
+- World restrictions
+- Item requirements
+- Quest requirements
+- Bukkit statistics
+- Custom API requirements
+
+## Integrations
+
+- Vault
+- PlaceholderAPI
+- LuckPerms
+- Geyser
+- Floodgate
+- bStats
+
+## Crossplay Features
+
+- Bedrock-safe layouts
+- Platform detection API
+- Floodgate integration
+- Touch-friendly GUIs
+- Crossplay-safe menus
+
+---
+
+# 📦 Requirements
+
+| Dependency | Required | Version |
+|------------|----------|---------|
+| Paper / Spigot | Yes | 1.20.1–1.21.x |
+| Java | Yes | 21+ |
+| Vault | Optional | Latest |
+| LuckPerms | Optional | Latest |
+| PlaceholderAPI | Optional | Latest |
+| MySQL | Optional | Latest |
+| Floodgate | Optional | Latest |
+
+---
+
+# 🚀 Installation
+
+## Step 1: Install Plugin
+
+Place:
+
+```text
+RankForge-3.0.jar
 ```
-If a soft dep is absent, that feature is gracefully skipped — no errors, no crashes.
-## Storage System
-RankForge uses a two-tier storage system:
-| Priority | Type | Location |
-|---|---|---|
-| **1st** | MySQL | Remote database (configured in config.yml) |
-| **2nd (default)** | YAML File | plugins/RankForge/data/playerdata.yml |
-If MySQL is configured and reachable, it is used. Otherwise, all player data is automatically stored in playerdata.yml — no setup required.
-**YAML format:**
+
+Inside:
+
+```text
+/plugins/
+```
+
+## Step 2: Start Server
+
+Generated files:
+
+```text
+plugins/
+└── RankForge/
+    ├── config.yml
+    ├── gui.yml
+    ├── ranks.yml
+    ├── playerdata.yml
+    └── data/
+```
+
+## Step 3: Configure
+
+Edit:
+
+- `config.yml`
+- `gui.yml`
+- `ranks.yml`
+
+## Step 4: Reload
+
+```text
+/rank reload
+```
+
+---
+
+# ⚡ Commands
+
+## Player Commands
+
+| Command | Description |
+|---------|-------------|
+| `/rank` | Open rank GUI |
+| `/rank up` | Rank up |
+| `/rank progress` | Show progress |
+| `/rank next` | Show next rank |
+| `/rank current` | Current rank |
+| `/rank requirements` | View requirements |
+| `/rank xp` | Vanilla XP information |
+| `/rank history` | Rank history |
+| `/rank help` | Help menu |
+
+## Admin Commands
+
+| Command | Description |
+|---------|-------------|
+| `/rank editor` | Open editor |
+| `/rank create` | Create rank |
+| `/rank delete` | Delete rank |
+| `/rank set` | Set rank |
+| `/rank reset` | Reset rank |
+| `/rank force` | Force rank |
+| `/rank reload` | Reload plugin |
+| `/rank playerlist` | Player editor |
+
+---
+
+# 🔐 Permissions
+
+```text
+rankforge.*                     -> All permissions
+rankforge.rank.use             -> Basic commands
+rankforge.rank.up              -> Rank up
+rankforge.rank.editor          -> Editor GUI
+rankforge.rank.create          -> Create ranks
+rankforge.rank.delete          -> Delete ranks
+rankforge.rank.reload          -> Reload plugin
+rankforge.rank.set             -> Set ranks
+rankforge.rank.reset           -> Reset ranks
+rankforge.rank.force           -> Force ranks
+rankforge.rank.playerlist      -> Player editor
+rankforge.rank.xp.admin        -> Manage XP
+```
+
+---
+
+# 🧩 PlaceholderAPI Placeholders
+
+## Rank
+
+```text
+%rankforge_rank%
+%rankforge_rank_name%
+%rankforge_next_rank%
+%rankforge_rank_prefix%
+```
+
+## Progress
+
+```text
+%rankforge_progress%
+%rankforge_progress_bar%
+%rankforge_progress_percent%
+```
+
+## Vanilla XP
+
+```text
+%rankforge_xp_level%
+%rankforge_xp_progress%
+```
+
+## Economy
+
+```text
+%rankforge_money%
+%rankforge_missing_money%
+```
+
+---
+
+# ⚙ Configuration
+
+## config.yml
+
 ```yaml
-players:
-  <uuid>:
-    name: "PlayerName"
-    rank: "Guest"
-    experience: 0
-    money: 0.0
-    language: "en"
+database:
+  type: mysql
+  host: localhost
+  port: 3306
+  name: rankforge
+  user: root
+  password: password
 
+crossplay:
+  bedrock-prefix: "."
+  clean-names: true
+
+timezone: UTC
 ```
-## Commands
-### Player
-| Command | Permission | Description |
-|---|---|---|
-| /rank | rankforge.rank.use | Open rank GUI |
-| /rank up | rankforge.rank.up | Attempt rank-up |
-| /rank progress | rankforge.rank.progress | Show progress bar |
-| /rank next | rankforge.rank.next | Show next rank info |
-| /rank current | rankforge.rank.current | Show current rank |
-| /rank requirements | rankforge.rank.requirements | List unmet requirements |
-| /rank version | rankforge.rank.system.version | Plugin info + soft-dep status |
-| /rank lang <set|list|reset> | rankforge.rank.lang | Change language |
-| /rank help | — | Context-aware help |
-### Admin
-| Command | Permission | Description |
-|---|---|---|
-| /rank editor | rankforge.rank.editor | Admin overview GUI |
-| /rank editor <rankId> | rankforge.rank.editor | Edit specific rank |
-| /rank editor drag | rankforge.rank.editor.drag | Drag-drop slot editor |
-| /rank editor save | rankforge.rank.editor.save | Save to ranks.yml |
-| /rank editor reload | rankforge.rank.reload | Hot-reload ranks.yml |
-| /rank playerlist | rankforge.rank.playerlist | View & edit all player data (GUI) |
-| /rank set <player> <rank> | rankforge.rank.set | Set player rank |
-| /rank reset <player> | rankforge.rank.reset | Reset to default rank |
-| /rank force <player> <rank> | rankforge.rank.force | Force rank (no checks) |
-| /rank reload | rankforge.rank.reload | Full plugin reload |
-| /rank stats | rankforge.rank.stats | System stats + soft-dep status |
-| /rank security | rankforge.rank.security | Anti-abuse status |
-| /rank debug | rankforge.rank.debug | Your rank debug info |
-## Player List GUI (/rank playerlist)
-Opens a paginated admin GUI showing all known players with their player heads.
- * **Page navigation** — previous/next arrows (45 players per page)
- * **Click a player head** — opens the **Player Data Editor GUI**
-### Player Data Editor GUI
-Edit any player's data directly from the GUI:
-| Field | Description |
-|---|---|
-| **Rank** | Change the player's current rank (must be a valid rank ID) |
-| **Experience** | Set the player's experience value |
-| **Money** | Set the player's money balance |
-| **Language** | Change the player's language (en, es, fil, id) |
-Click any field to edit via chat input. Type cancel to abort. Changes are saved immediately to YAML and/or MySQL.
-## ConfigUpdater
-On every plugin start or /rank reload, RankForge automatically checks all config and language files for missing keys introduced by plugin updates. Missing keys are added with their default values — **your existing settings are never overwritten**.
-Files checked:
- * config.yml
- * lang/en.yml, lang/es.yml, lang/fil.yml, lang/id.yml
-## Placeholders
-### PlaceholderAPI Format (%rankforge_xxx%)
-Requires PlaceholderAPI to be installed.
-| Placeholder | Description |
-|---|---|
-| %rankforge_rank% | Current rank ID |
-| %rankforge_rank_name% | Current rank display name |
-| %rankforge_rank_prefix% | Rank chat prefix |
-| %rankforge_rank_position% | Rank position in chain (1, 2, 3…) |
-| %rankforge_next_rank% | Next rank ID (or MAX) |
-| %rankforge_next_cost% | Next rank money requirement |
-| %rankforge_is_max_rank% | true/false |
-| %rankforge_progress% | Progress value 0.0–100.0 |
-| %rankforge_progress_bar% | ██████░░░░ bar string |
-| %rankforge_progress_percent% | "73.4%" |
-| %rankforge_money% | Player's current balance |
-| %rankforge_player% | Player name |
-| %rankforge_uuid% | Player UUID |
-| %rankforge_lang% | Player language code |
-| %rankforge_version% | Plugin version |
-| %rankforge_gui_title% | GUI title string |
-| %rankforge_top_rank_1/2/3% | Top ranked players |
-## ranks.yml Format
+
+## ranks.yml
+
 ```yaml
 ranks:
-  RankId:
-    display-name: "§aDisplay Name"    # Color codes supported
-    next-rank: "NextRankId"            # Empty = max rank
-    slot: 12                           # GUI slot 9–44
-    material: GREEN_WOOL               # Bukkit Material name
-    chat-prefix: "§a[Rank]"
-    permissions: []                    # Granted on rank-up via LuckPerms (or Bukkit fallback)
-    lore:
-      - "§7Description line"
-    requirements:
-      money: 5000                      # Vault balance required
-      xp-level: 10                     # XP level required
-      permission: ""                   # Permission gate (empty = none)
-    commands:                          # Console commands on rank-up
-      - "broadcast §e%player% ranked up!"
-      - "give %player% diamond 1"
+  Member:
+    display-name: "&aMember"
 
+    requirements:
+      money: 5000
+      xp-level: 10
+      block-breaks: 200
+      playtime-minutes: 60
+
+    next-rank: Builder
 ```
-## Supported Versions
-1.20.1 · 1.20.2 · 1.20.4 · 1.20.6 · 1.21 · 1.21.1 · 1.21.2 · 1.21.3 · 1.21.4 · 1.21.5+
-## License
-MIT — free to use and modify with attribution to JoshuaOP.
+
+## gui.yml
+
+```yaml
+themes:
+  default:
+    border: CYAN_STAINED_GLASS_PANE
+
+search:
+  enabled: true
+
+pagination:
+  enabled: true
+```
+
+---
+
+# 👤 Player Data
+
+Stored at:
+
+```text
+plugins/RankForge/playerdata.yml
+```
+
+Example:
+
+```yaml
+players:
+
+  uuid:
+
+    rank: Member
+
+    block-breaks: 230
+
+    settings:
+      language: en
+```
+
+---
+
+# 🌐 Crossplay Support
+
+Automatic support for:
+
+- Geyser
+- Floodgate
+- Bedrock players
+- Crossplay GUIs
+- Mobile-friendly layouts
+
+API:
+
+```java
+isBedrockPlayer()
+
+getCleanName()
+
+hasFloodgate()
+```
+
+---
+
+# 🛠 Developer API
+
+```java
+RankForgeAPI api = RankForgeAPI.getInstance();
+
+api.rankUp(player);
+
+api.setRank(player, "VIP");
+
+api.resetRank(player);
+```
+
+Events:
+
+```text
+RankupEvent
+RankSetEvent
+RankResetEvent
+```
+
+---
+
+# 💾 Storage
+
+## YAML
+
+```text
+plugins/RankForge/playerdata.yml
+```
+
+## MySQL
+
+Supports:
+
+- Automatic migrations
+- Fallback mode
+- Caching
+- Async saves
+
+---
+
+# 📋 Release Notes v3.0
+
+### Added
+
+- Crossplay support
+- Search system
+- Pagination
+- Vanilla XP support
+
+### Improved
+
+- Performance
+- Async safety
+- GUI stability
+
+### Removed
+
+- Leaderboard system
+- Dead code
+- Unused managers
+
+# 📄 License
+
+RankForge is a proprietary plugin developed by **JoshuaOP**.
+
+All rights reserved unless explicitly stated in the download source or release page.
+
+You may use this plugin on your server, but redistribution or modification without permission is not allowed.
+---
+
+# ❤️ Credits
+
+Developed by **JoshuaOP**
