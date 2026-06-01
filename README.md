@@ -4,7 +4,7 @@
 
 ![Spigot](https://img.shields.io/badge/Spigot-1.20.1--1.21.x-orange)
 ![Java](https://img.shields.io/badge/Java-21-blue)
-![Version](https://img.shields.io/badge/Version-3.0-brightgreen)
+![Version](https://img.shields.io/badge/Version-v2.-brightgreen)
 ![License](https://img.shields.io/badge/License-MIT-lightgrey)
 
 ---
