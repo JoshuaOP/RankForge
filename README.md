@@ -129,7 +129,7 @@ Supports:
 Place:
 
 ```text
-RankForge-3.0.jar
+RankForge.jar
 ```
 
 Inside:
@@ -393,7 +393,7 @@ Supports:
 
 ---
 
-# 📋 Release Notes v3.0
+# 📋 Release Notes
 
 ### Added
 
