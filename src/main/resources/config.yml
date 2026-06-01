@@ -1,0 +1,166 @@
+# ==============================================================================
+#   RankForge Configuration
+#   Author: JoshuaOP
+# ==============================================================================
+
+# ── Database & Storage ────────────────────────────────────────────────────────
+# If MySQL is unavailable at startup, RankForge automatically falls back to
+# YAML file storage at plugins/RankForge/data/playerdata.yml.
+database:
+  type: "mysql"
+  host: "localhost"
+  port: 3306
+  name: "rankforge"
+  user: "root"
+  password: "password"
+  pool-size: 10
+  timeout: 5000
+
+# ── Language ──────────────────────────────────────────────────────────────────
+language:
+  default: "en"
+  per-player: true
+
+# ── Security & Anti-Abuse ─────────────────────────────────────────────────────
+anti-bypass:
+  enabled: true
+  cooldown-ms: 2000
+
+gui-click-shield:
+  enabled: true
+  cooldown-ms: 400
+
+anti-abuse:
+  enabled: true
+  macro-threshold-ms: 20
+  command-cooldown-ms: 1000
+
+# ── Announcements ─────────────────────────────────────────────────────────────
+announcements:
+  enabled: true
+  rankup:
+    broadcast: true
+    message: "§6[RankForge] §e%player% §ahas ranked up to §6%rank%§a!"
+    title:
+      enabled: true
+      title: "§6✦ Rank Up! ✦"
+      subtitle: "§eYou are now §a%rank%"
+      fade-in: 10
+      stay: 60
+      fade-out: 10
+    action-bar:
+      enabled: true
+      message: "§a✦ You ranked up to §e%rank% §a✦"
+
+# ── Cosmetics ─────────────────────────────────────────────────────────────────
+cosmetic:
+  bossbar:
+    enabled: true
+    duration-ticks: 100
+  particles:
+    enabled: true
+    # How long (in seconds) the rankup particle trail lasts before auto-expiring.
+    # Set to 0 to disable the timed trail entirely.
+    # The login/restore trail is always permanent (no expiry).
+    rankup-trail-duration-seconds: 30
+    ranks:
+      Guest:   "CRIT"
+      Member:  "VILLAGER_HAPPY"
+      Builder: "NOTE"
+      Expert:  "FLAME"
+      Elite:   "TOTEM"
+  join-quit:
+    enabled: true
+    join-message: "{prefix}§e{player} §ajoined the server."
+    quit-message: "{prefix}§e{player} §cleft the server."
+  tablist:
+    enabled: true
+    format: "{prefix}{player}"
+
+# ── Performance ───────────────────────────────────────────────────────────────
+performance:
+  tps-monitor:
+    enabled: true
+    sample-ticks: 100
+  modes:
+    high-tps-threshold: 18.0
+    medium-tps-threshold: 14.0
+
+# ── GUI ───────────────────────────────────────────────────────────────────────
+gui:
+  rows: 6
+  admin-rows: 6
+
+# ── Data Sync & Cache ─────────────────────────────────────────────────────────
+sync:
+  interval-ticks: 200
+
+cache:
+  ttl-minutes: 10
+  purge-interval-ticks: 6000
+
+# ── YAML Rank Storage ─────────────────────────────────────────────────────────
+yaml-ranks:
+  enabled: true
+  file: "ranks.yml"
+  backup-on-save: true
+
+# ── Requirements ──────────────────────────────────────────────────────────────
+# Built-in requirement types available for use in ranks.yml:
+#   money          — Vault balance (requires Vault)
+#   xp-level       — Minecraft XP level
+#   permission     — Bukkit permission node (player must have it before ranking up)
+#   playtime       — Total playtime in minutes (via vanilla Minecraft statistics)
+#   mob-kills      — Total mob kills (via vanilla statistics)
+#   block-breaks   — Approximate total blocks mined (via vanilla statistics)
+#   statistic-id   — Any general Bukkit Statistic name (e.g. DEATHS, JUMP, WALK_ONE_CM)
+#   statistic-value— Required value for the statistic above
+#   quests         — Quest IDs checked via permission rankforge.quest.completed.<id>
+#   worlds         — Player must be in one of the listed worlds when ranking up
+#   items          — Player must have specific items in their inventory
+#   custom         — Third-party requirements via CustomRequirementRegistry API
+requirements:
+  enabled: true
+  types:
+    - money
+    - xp-level
+    - permission
+    - playtime
+    - mob-kills
+    - block-breaks
+    - statistic
+    - quests
+    - worlds
+    - items
+    - custom
+
+# ── Default Rank ──────────────────────────────────────────────────────────────
+ranks:
+  default-rank: "Guest"
+
+# ── Metrics (bStats) ──────────────────────────────────────────────────────────
+# Anonymous usage statistics sent to bstats.org. No personal data is collected.
+# Metrics are always enabled. Server owners may opt out globally via the bStats
+# config at plugins/bStats/config.yml on their server.
+# See: https://bstats.org/plugin/bukkit/RankForge
+
+# ── Crossplay (Geyser / Floodgate) ───────────────────────────────────────────
+# RankForge detects Bedrock (Geyser) players automatically when Floodgate is
+# installed. No extra configuration is required for basic crossplay support.
+# The prefix below must match the 'username-prefix' in your Floodgate config.yml
+# (default is "."). Used by isBedrockPlayer() and getCleanName() in the API.
+crossplay:
+  bedrock-prefix: "."
+  # When true, rank-up messages use getCleanName() (strips the Bedrock prefix).
+  clean-names-in-messages: true
+
+# ── Timezone ──────────────────────────────────────────────────────────────────
+# IANA timezone ID for rank history timestamps.
+# Example: "America/New_York", "Asia/Manila", "Europe/London"
+# Leave blank to use the server's system default timezone.
+timezone: ""
+
+# ── Debug Logging ─────────────────────────────────────────────────────────────
+# When true, verbose debug messages are printed to the console.
+# Keep false in production to prevent console spam.
+debug: false
