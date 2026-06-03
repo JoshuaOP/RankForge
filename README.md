@@ -408,12 +408,6 @@ Supports:
 - Async safety
 - GUI stability
 
-### Removed
-
-- Leaderboard system
-- Dead code
-- Unused managers
-
 # 📄 License
 
 RankForge is a proprietary plugin developed by **JoshuaOP**.
