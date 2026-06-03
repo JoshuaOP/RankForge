@@ -1,0 +1,224 @@
+# ==============================================================================
+#   RankForge — Rank Definitions
+#   Author: JoshuaOP
+#
+#   Edit ranks here or in-game via /rank editor
+#   Hot-reload: /rank editor reload   |   Save to disk: /rank editor save
+#
+#   Available requirement fields (all optional — omit any you don't need):
+#     money             — Vault balance required          (e.g. 5000.0)
+#     xp-level          — Minecraft XP level              (e.g. 10)
+#     permission        — Permission node player must have (e.g. vip.access)
+#     playtime-minutes  — Total playtime in minutes        (e.g. 120)
+#     mob-kills         — Total mob kills (vanilla stat)   (e.g. 50)
+#     block-breaks      — Total blocks mined (vanilla stat)(e.g. 500)
+#     statistic-id      — Untyped Bukkit Statistic name    (e.g. JUMP, DEATHS)
+#     statistic-value   — Required value for statistic-id  (e.g. 100)
+#     quests            — List of quest IDs (checked via permission node:
+#                         rankforge.quest.completed.<questId>)
+#     worlds            — Player must be in one of these worlds when ranking up
+#     items             — Map of MATERIAL: amount required in inventory
+# ==============================================================================
+
+# ── Global Default Rank Definition ───────────────────────────────────────────
+default-rank: "Guest"
+
+ranks:
+
+  # ── Guest — Default starting rank, no requirements ──────────────────────────
+  Guest:
+    display-name: "§7Guest"
+    next-rank: "Member"
+    slot: 10
+    material: GRAY_WOOL
+    chat-prefix: "§7[Guest] "
+    lore:
+      - "§7The default starting rank."
+      - "§8No requirements to hold."
+    permissions: []
+    commands: ""
+    requirements:
+      money: 0
+      xp-level: 0
+      permission: ""
+
+  # ── Member — Rewards basic activity ─────────────────────────────────────────
+  Member:
+    display-name: "§aMember"
+    next-rank: "Builder"
+    slot: 12
+    material: GREEN_WOOL
+    chat-prefix: "§a[Member] "
+    lore:
+      - "§7Requirements to advance:"
+      - "  §8• §7Money: §e$5,000"
+      - "  §8• §7XP Level: §a10"
+      - "  §8• §7Playtime: §f60 mins"
+      - "  §8• §7Mob Kills: §c25"
+      - "  §8• §7Block Breaks: §9200"
+    permissions:
+      - "essentials.kits.member"
+      - "essentials.home"
+    commands:
+      - "broadcast §6✦ §e%player% §aranked up to §aMember§a! ✦"
+      - "title %player% subtitle {\"text\":\"You are now Member!\",\"color\":\"green\"}"
+    requirements:
+      money: 5000
+      xp-level: 10
+      playtime-minutes: 60
+      mob-kills: 25
+      block-breaks: 200
+
+  # ── Builder — Demonstrates quest + statistic requirements ───────────────────
+  Builder:
+    display-name: "§9Builder"
+    next-rank: "Expert"
+    slot: 14
+    material: BLUE_WOOL
+    chat-prefix: "§9[Builder] "
+    lore:
+      - "§7Requirements to advance:"
+      - "  §8• §7Money: §e$15,000"
+      - "  §8• §7XP Level: §a25"
+      - "  §8• §7Playtime: §f300 mins"
+      - "  §8• §7Mob Kills: §c100"
+      - "  §8• §7Block Breaks: §92,000"
+      - "  §8• §7Quests: §dIntro Quest"
+      - "  §8• §7Statistic: §6100 Jumps"
+    permissions:
+      - "minecraft.command.gamemode"
+      - "worldedit.generation.sphere"
+    commands:
+      - "broadcast §6✦ §e%player% §9ranked up to §9Builder§9! ✦"
+    requirements:
+      money: 15000
+      xp-level: 25
+      playtime-minutes: 300
+      mob-kills: 100
+      block-breaks: 2000
+      quests:
+        - intro_quest
+      statistic-id: "JUMP"
+      statistic-value: 100
+
+  # ── Expert — Demonstrates world + item requirements ─────────────────────────
+  Expert:
+    display-name: "§6Expert"
+    next-rank: "Elite"
+    slot: 16
+    material: ORANGE_WOOL
+    chat-prefix: "§6[Expert] "
+    lore:
+      - "§7Requirements to advance:"
+      - "  §8• §7Money: §e$50,000"
+      - "  §8• §7XP Level: §a50"
+      - "  §8• §7Playtime: §f1,200 mins"
+      - "  §8• §7Mob Kills: §c500"
+      - "  §8• §7Block Breaks: §910,000"
+      - "  §8• §7Required Items: §b5x Diamond"
+      - "  §8• §7Quests: §dIntro & Explore Quests"
+      - "  §8• §7Location: §aMust be in Overworld (world)"
+    permissions:
+      - "essentials.sethome.multiple.3"
+    commands:
+      - "broadcast §6✦ §e%player% §6ranked up to §6Expert§6! ✦"
+    requirements:
+      money: 50000
+      xp-level: 50
+      playtime-minutes: 1200
+      mob-kills: 500
+      block-breaks: 10000
+      worlds:
+        - world
+      items:
+        DIAMOND: 5
+      quests:
+        - intro_quest
+        - explore_quest
+
+  # ── Elite — Ultimate veteran status progression ─────────────────────────────
+  Elite:
+    display-name: "§c§lElite"
+    next-rank: "Lord"
+    slot: 18
+    material: RED_WOOL
+    chat-prefix: "§c§l[Elite] "
+    lore:
+      - "§7Requirements to advance:"
+      - "  §8• §7Money: §e$100,000"
+      - "  §8• §7XP Level: §a100"
+      - "  §8• §7Playtime: §f6,000 mins"
+      - "  §8• §7Mob Kills: §c2,000"
+      - "  §8• §7Block Breaks: §950,000"
+      - "  §8• §7Required Items: §b1x Nether Star"
+      - "  §8• §7Quests: §dIntro, Explore & Master Quests"
+      - "  §8• §7Statistic: §4Fewer than 100 Deaths"
+      - "  §8• §7Location: §aOverworld, Nether, or End"
+    permissions:
+      - "essentials.fly"
+      - "essentials.repair"
+    commands:
+      - "broadcast §4✦ §c%player% §6has advanced to §c§lElite§6! ✦"
+      - "give %player% diamond 5"
+    requirements:
+      money: 100000
+      xp-level: 100
+      playtime-minutes: 6000
+      mob-kills: 2000
+      block-breaks: 50000
+      worlds:
+        - world
+        - world_nether
+        - world_the_end
+      items:
+        NETHER_STAR: 1
+      quests:
+        - intro_quest
+        - explore_quest
+        - master_quest
+      statistic-id: "DEATHS"
+      statistic-value: 100
+
+  # ── Lord — Max rank, absolute legendary server echelon ──────────────────────
+  Lord:
+    display-name: "§b§lLord"
+    next-rank: ""
+    slot: 22
+    material: NETHERITE_INGOT
+    chat-prefix: "§b§l[Lord] "
+    lore:
+      - "§7Requirements to ascend to Lordship:"
+      - "  §8• §7Money: §e$500,000"
+      - "  §8• §7XP Level: §a150"
+      - "  §8• §7Playtime: §f12,000 mins"
+      - "  §8• §7Mob Kills: §c5,000"
+      - "  §8• §7Block Breaks: §9100,000"
+      - "  §8• §7Required Items: §b3x Netherite Block"
+      - "  §8• §7Quests: §dAll Campaign Chapters"
+      - "  §8• §7Location: §aOverworld, Nether, or End"
+      - ""
+      - "§b§l✦ Maximum Server Rank! ✦"
+    permissions:
+      - "essentials.god"
+      - "essentials.workbench"
+    commands:
+      - "broadcast §b§l✦ §e§lLEGENDARY! §b%player% §fhas achieved the absolute max rank: §b§lLORD§b§l! ✦"
+      - "title %player% title {\"text\":\"ASCENDED!\",\"color\":\"aqua\",\"bold\":true}"
+      - "give %player% netherite_block 1"
+    requirements:
+      money: 500000
+      xp-level: 150
+      playtime-minutes: 12000
+      mob-kills: 5000
+      block-breaks: 100000
+      worlds:
+        - world
+        - world_nether
+        - world_the_end
+      items:
+        NETHERITE_BLOCK: 3
+      quests:
+        - intro_quest
+        - explore_quest
+        - master_quest
+        - campaign_final

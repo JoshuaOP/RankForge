@@ -1,0 +1,130 @@
+name: RankForge
+version: ${project.version}
+main: com.joshuaop.rankforge.RankForge
+api-version: "1.21"
+authors:
+  - JoshuaOP
+description: A modular, production-ready rank management plugin with full Developer API.
+website: https://github.com/JoshuaOP/RankForge
+
+soft-depend:
+  - Vault
+  - LuckPerms
+  - PermissionsEx
+  - PlaceholderAPI
+  - EssentialsChat
+  - DeluxeTags
+  - floodgate
+  - Geyser-Spigot
+
+commands:
+  rank:
+    description: Main RankForge command.
+    usage: /rank [subcommand]
+    aliases:
+      - ranks
+    permission: rankforge.rank.use
+
+permissions:
+  rankforge.*:
+    description: Grants all RankForge permissions.
+    default: op
+    children:
+      rankforge.rank.use: true
+      rankforge.rank.up: true
+      rankforge.rank.progress: true
+      rankforge.rank.next: true
+      rankforge.rank.current: true
+      rankforge.rank.requirements: true
+      rankforge.rank.history: true
+      rankforge.rank.editor: true
+      rankforge.rank.editor.drag: true
+      rankforge.rank.create: true
+      rankforge.rank.delete: true
+      rankforge.rank.set: true
+      rankforge.rank.reset: true
+      rankforge.rank.force: true
+      rankforge.rank.lang: true
+      rankforge.rank.reload: true
+      rankforge.rank.debug: true
+      rankforge.rank.stats: true
+      rankforge.rank.security: true
+      rankforge.rank.sound: true
+      rankforge.rank.xp.admin: true
+      rankforge.rank.system.version: true
+      rankforge.rank.playerlist: true
+
+  # ── Player Permissions ──────────────────────────────────────────────────────
+  rankforge.rank.use:
+    description: Open the rank GUI.
+    default: true
+  rankforge.rank.up:
+    description: Attempt to rank up.
+    default: true
+  rankforge.rank.progress:
+    description: View rank progress.
+    default: true
+  rankforge.rank.next:
+    description: View next rank info.
+    default: true
+  rankforge.rank.current:
+    description: View current rank.
+    default: true
+  rankforge.rank.requirements:
+    description: View rank requirements.
+    default: true
+  rankforge.rank.history:
+    description: View personal rank history.
+    default: true
+
+  # ── Admin Permissions ───────────────────────────────────────────────────────
+  rankforge.rank.editor:
+    description: Open the admin rank editor GUI.
+    default: op
+  rankforge.rank.editor.drag:
+    description: Open the drag-and-drop slot editor.
+    default: op
+  rankforge.rank.create:
+    description: Create a new rank via command or GUI.
+    default: op
+  rankforge.rank.delete:
+    description: Delete an existing rank via command or GUI.
+    default: op
+  rankforge.rank.set:
+    description: Set a player's rank.
+    default: op
+  rankforge.rank.reset:
+    description: Reset a player's rank.
+    default: op
+  rankforge.rank.force:
+    description: Force a player to a specific rank (no checks).
+    default: op
+  rankforge.rank.lang:
+    description: Manage personal language setting.
+    default: true
+  rankforge.rank.reload:
+    description: Reload RankForge configuration.
+    default: op
+  rankforge.rank.debug:
+    description: View debug info.
+    default: op
+  rankforge.rank.stats:
+    description: View system stats.
+    default: op
+  rankforge.rank.security:
+    description: View security/anti-bypass status.
+    default: op
+  rankforge.rank.sound:
+    description: Manage sound settings.
+    default: op
+  rankforge.rank.xp.admin:
+    description: Set or add XP for other players.
+    default: op
+
+  # ── System Permissions ──────────────────────────────────────────────────────
+  rankforge.rank.system.version:
+    description: View plugin version and soft-dependency status.
+    default: true
+  rankforge.rank.playerlist:
+    description: View and edit all player data via GUI.
+    default: op

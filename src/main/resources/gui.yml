@@ -1,0 +1,113 @@
+# ==============================================================================
+#   ✦ RankForge — GUI Configuration — v3.0 ✦
+#   All GUI layout, title, border, and slot settings live here.
+#   Use & color codes (&6=gold, &a=green, &c=red, &8=dark_grey, etc.)
+#   Material names must match Bukkit Material enum values (ALL_CAPS).
+#   Row count settings are in config.yml under the 'gui' section.
+# ==============================================================================
+
+# ── Player-facing rank tree GUI  (/rank) ──────────────────────────────────────
+player-gui:
+  title: "&8✦ &6RankForge &8✦"
+  border-material: CYAN_STAINED_GLASS_PANE
+  head-slot: 4
+  info-slot: 49
+
+# ── Admin overview editor  (/rank editor) ─────────────────────────────────────
+admin-gui:
+  title: "&8✦ &cAdmin Rank Editor &8✦"
+  border-material: RED_STAINED_GLASS_PANE
+
+# ── Per-rank detail editor  (click a rank in the admin editor) ────────────────
+detail-editor:
+  title-prefix: "&8✦ &6Editing: "
+  border-top: LIME_STAINED_GLASS_PANE
+  border-bottom: GRAY_STAINED_GLASS_PANE
+
+# ── Drag-and-drop slot reassignment editor ────────────────────────────────────
+drag-drop:
+  title: "&8✦ &bSlot Editor &8✦"
+
+# ── Player List GUI  (/rank playerlist) ───────────────────────────────────────
+# Supports pagination — one page = 45 player heads (slots 0-44).
+# Prev/close/next buttons occupy slots 45, 49, 53 respectively.
+player-list:
+  title: "&8✦ &9Player List &8✦"
+  border-material: BLUE_STAINED_GLASS_PANE
+  prev-page-slot: 45
+  close-slot: 49
+  next-page-slot: 53
+
+# ── Player Data Editor GUI  (click a player in the player list) ───────────────
+player-data-editor:
+  title-prefix: "&8✦ &9Editing: "
+  border-material: LIGHT_BLUE_STAINED_GLASS_PANE
+  # Slot layout for the player data editor rows:
+  #   Row 2: rank, XP, money, language
+  #   Row 3: block-breaks (read-only display), playtime (read-only display)
+  #   Row 4: history, reset, save, close
+  block-breaks:
+    # Display slot for the block-break count in the PlayerDataEditorGUI.
+    slot: 30
+    material: IRON_PICKAXE
+    name: "&7&lBlock Breaks"
+    lore:
+      - "&7Exact blocks broken (tracked by RankForge)."
+      - "&7Source: &aBlockBreakTracker &7(not vanilla stats)."
+      - ""
+      - "&7Value is updated in real-time."
+      - "&8Read-only — cannot be edited via GUI."
+
+# ── Block-Break Stats Panel  (shown inside player-data-editor and rank GUI) ───
+# These settings control how the block-break counter is displayed in GUIs.
+block-break-stats:
+  # Whether to show the block-break count panel in the rank tree GUI info item.
+  show-in-rank-gui: true
+  # Whether to show the block-break count in the player data editor.
+  show-in-player-data-editor: true
+  # Label used wherever the block-break count is displayed.
+  label: "&7Blocks Broken"
+  # Material used to represent the block-break stat in any stat panel.
+  material: IRON_PICKAXE
+  # Format for the count value. Supports comma-formatting for large numbers.
+  # %count% is replaced with the formatted count.
+  value-format: "&a%count%"
+  # Shown in rank requirement list when the requirement is not yet met.
+  unmet-format: "&cNeed &e%required% &cblocks &8(have &7%current%&8)"
+  # Shown in rank requirement list when the requirement is met.
+  met-format: "&a✔ &e%required% &ablocks broken"
+
+# ── Common Shared Window Elements ─────────────────────────────────────────────
+common:
+  filler-material: GRAY_STAINED_GLASS_PANE
+  close-material: BARRIER
+  close-name: "&cClose"
+  back-material: ARROW
+  back-name: "&7Back"
+
+# ── Rank Item Requirement Icons ───────────────────────────────────────────────
+# Controls how requirement status is shown on the next-rank item in the GUI.
+requirement-icons:
+  # Show green/red requirement icons on the next-rank item in the rank tree.
+  enabled: true
+  met-symbol: "&a✔"
+  unmet-symbol: "&c✘"
+  # Show detailed requirement lines (money, XP, permission).
+  show-details: true
+
+# ── Themes ────────────────────────────────────────────────────────────────────
+# Future: define named themes here. Currently, border materials are set per-GUI.
+# Themes will be selectable per-server or per-player in a future update.
+themes:
+  default:
+    player-border: CYAN_STAINED_GLASS_PANE
+    admin-border: RED_STAINED_GLASS_PANE
+    list-border: BLUE_STAINED_GLASS_PANE
+  dark:
+    player-border: BLACK_STAINED_GLASS_PANE
+    admin-border: RED_STAINED_GLASS_PANE
+    list-border: BLUE_STAINED_GLASS_PANE
+  gold:
+    player-border: YELLOW_STAINED_GLASS_PANE
+    admin-border: ORANGE_STAINED_GLASS_PANE
+    list-border: YELLOW_STAINED_GLASS_PANE
