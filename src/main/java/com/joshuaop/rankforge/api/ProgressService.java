@@ -272,7 +272,8 @@ public class ProgressService {
     }
 
     /**
-     * Builds a colored progress bar.
+     * Builds a colored progress bar string.
+     *
      * @param percent 0.0–100.0
      * @param blocks  total bar block count
      */
@@ -302,12 +303,21 @@ public class ProgressService {
             String required,
             double percent
     ) {
-        /** Formats the entry as a single colorized chat line. */
+        /**
+         * Formats the entry as a single colorized chat/lore line.
+         *
+         * Icons:
+         *   §a✔  — fully met (100 %)
+         *   §e⏳  — partially met (> 0 % but < 100 %)
+         *   §c✘  — not started (0 %)
+         */
         public String toDisplayLine() {
-            boolean met = percent >= 100.0;
-            String  bar = buildBar(percent, 5);
-            return (met ? "§a✔ " : "§c✘ ") + "§7" + label + ": "
-                    + current + " §8/ §7" + required
+            boolean met     = percent >= 100.0;
+            boolean started = percent > 0.0;
+            String  icon    = met ? "§a✔" : started ? "§e⏳" : "§c✘";
+            String  bar     = buildBar(percent, 5);
+            return icon + " §7" + label + ": §f" + current
+                    + " §8/ §7" + required
                     + " §8[" + bar + "§8] §e" + String.format("%.0f", percent) + "§7%";
         }
     }

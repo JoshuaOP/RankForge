@@ -50,7 +50,7 @@ public class BlockBreakTracker implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
-        if (!(event.getPlayer() instanceof Player player)) return;
+        Player player = event.getPlayer();
         // Silktouch and creative-mode blocks still count — this is a raw activity metric.
         // Servers that want to exclude creative can add a check here:
         //   if (player.getGameMode() == GameMode.CREATIVE) return;

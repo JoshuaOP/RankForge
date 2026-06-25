@@ -1,6 +1,7 @@
 package com.joshuaop.rankforge.gui;
 
 import com.joshuaop.rankforge.RankForge;
+import com.joshuaop.rankforge.api.ProgressService;
 import com.joshuaop.rankforge.rank.RankModel;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -10,6 +11,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.SkullMeta;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -19,10 +21,17 @@ import java.util.UUID;
  * Main player-facing rank tree GUI.
  *
  * Layout (54 slots):
- * Slot 4   — Player head info panel
- * Slots 9-44 — Rank items at their configured slots
- * Slot 49  — Dynamic Next Rank display item
- * Row 1 + Row 6 — Cyan glass border
+ *   Slot 4   — Player head info panel
+ *   Slots 9–44 — Rank items at their configured slots
+ *   Slot 49  — Dynamic Next Rank display item
+ *   Row 1 + Row 6 — Cyan glass border
+ *
+ * Improvements:
+ *   - Requirements shown for ALL ranks using ProgressService (covers money, XP, playtime,
+ *     mob kills, block breaks, items, permissions, quests, worlds, statistics, custom).
+ *   - Next rank item uses buildNext() variant with emerald-block highlight when ready.
+ *   - Player head shows a richer summary with progress bar and balance.
+ *   - Status icons: ✔ completed, ⏳ current, ➤ next/in-progress, 🔒 locked.
  */
 public class AnimatedRankTreeGUI {
 
@@ -56,14 +65,15 @@ public class AnimatedRankTreeGUI {
     }
 
     private void buildPlayerHead(Inventory inv, Player player) {
-        String cur     = getCurrentRankId(player);
-        String nextId  = plugin.getRankManager().getNextRankId(cur);
-        double pct     = plugin.getApi().getProgress(player);
-        String curName = plugin.getRankManager().getDisplayName(cur);
-        String nxtName = (nextId == null || nextId.isBlank()) ? "§6MAX RANK"
-                : plugin.getRankManager().getDisplayName(nextId);
-        double balance = plugin.getSoftDependency().getBalance(player);
-        String bar     = plugin.getApi().getProgressService().getProgressBar(player);
+        String cur      = getCurrentRankId(player);
+        String nextId   = plugin.getRankManager().getNextRankId(cur);
+        double pct      = plugin.getApi().getProgress(player);
+        String curName  = plugin.getRankManager().getDisplayName(cur);
+        String nxtName  = (nextId == null || nextId.isBlank()) ? "§6§lMAX RANK"
+                          : plugin.getRankManager().getDisplayName(nextId);
+        double balance  = safeBalance(player);
+        String bar      = plugin.getApi().getProgressService().getProgressBar(player);
+        String pctColor = pct >= 100.0 ? "§a" : pct >= 50.0 ? "§e" : "§c";
 
         ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
         SkullMeta meta  = (SkullMeta) skull.getItemMeta();
@@ -73,13 +83,12 @@ public class AnimatedRankTreeGUI {
         meta.setDisplayName("§b§l" + player.getName());
         meta.setLore(List.of(
                 "",
-                "§7  Current Rank: " + curName,
-                "§7  Next Rank:    " + nxtName,
+                "§7  Current Rank:  " + curName,
+                "§7  Next Rank:     " + nxtName,
                 "",
-                "§7  Money:    §a$" + String.format("%,.0f", balance),
-                "§7  XP Level: §a" + player.getLevel(),
+                "§7  Balance:   §a$" + String.format("%,.0f", balance),
+                "§7  XP Level:  §a" + player.getLevel(),
                 "",
-                "§7  Progress: " + bar + " §e" + String.format("%.1f", pct) + "§7%",
                 ""
         ));
         skull.setItemMeta(meta);
@@ -87,57 +96,64 @@ public class AnimatedRankTreeGUI {
     }
 
     private void buildRankItems(Inventory inv, Player player) {
-        String currentId      = getCurrentRankId(player);
+        String  currentId     = getCurrentRankId(player);
+        String  nextId        = plugin.getRankManager().getNextRankId(currentId);
         boolean passedCurrent = false;
-        String nextId         = plugin.getRankManager().getNextRankId(currentId);
 
         for (RankModel rank : plugin.getRankManager().getModelList()) {
-            boolean isCurrent  = rank.getId().equals(currentId);
+            boolean isCurrent = rank.getId().equals(currentId);
+            boolean isNext    = rank.getId().equals(nextId);
             boolean isUnlocked = !passedCurrent && !isCurrent;
-            boolean isNext     = rank.getId().equals(nextId);
             if (isCurrent) passedCurrent = true;
 
             int slot = rank.getSlot();
             if (slot < 9 || slot > 44) continue;
 
-            ItemStack item = RankItemBuilder.build(rank, isCurrent, isUnlocked);
-
+            ItemStack item;
             if (isNext) {
                 boolean meetsReqs = plugin.getRequirementManager().meetsAll(player, rank.getId());
+                item = RankItemBuilder.buildNext(rank, meetsReqs);
                 item = appendRequirementStatus(item, player, rank, meetsReqs);
+            } else {
+                item = RankItemBuilder.build(rank, isCurrent, isUnlocked);
             }
 
             inv.setItem(slot, item);
         }
     }
 
+    /**
+     * Appends live per-requirement progress to the next-rank item using ProgressService.
+     * Covers all requirement types: money, XP, playtime, mob kills, block breaks,
+     * items, permissions, quests, worlds, statistics, and custom requirements.
+     */
     private ItemStack appendRequirementStatus(ItemStack item, Player player, RankModel rank, boolean meetsAll) {
         if (item == null) return item;
         ItemMeta meta = item.getItemMeta();
         if (meta == null) return item;
 
-        List<String> lore = meta.getLore() != null ? new java.util.ArrayList<>(meta.getLore()) : new java.util.ArrayList<>();
-        lore.add("");
-        lore.add("§8─── Requirements ───");
+        List<String> lore = meta.getLore() != null
+                ? new ArrayList<>(meta.getLore())
+                : new ArrayList<>();
 
-        if (rank.getRequiredMoney() > 0) {
-            double bal = plugin.getSoftDependency().getBalance(player);
-            boolean met = bal >= rank.getRequiredMoney();
-            lore.add((met ? "§a✔" : "§c✘") + " §7Money: §e$" + String.format("%,.0f", rank.getRequiredMoney())
-                    + (met ? "" : " §8(§chave $" + String.format("%,.0f", bal) + "§8)"));
-        }
-        if (rank.getRequiredXpLevel() > 0) {
-            boolean met = player.getLevel() >= rank.getRequiredXpLevel();
-            lore.add((met ? "§a✔" : "§c✘") + " §7XP Level: §eLevel " + rank.getRequiredXpLevel()
-                    + (met ? "" : " §8(§chave " + player.getLevel() + "§8)"));
-        }
-        if (rank.getRequiredPermission() != null && !rank.getRequiredPermission().isBlank()) {
-            boolean met = player.hasPermission(rank.getRequiredPermission());
-            lore.add((met ? "§a✔" : "§c✘") + " §7Permission: §e" + rank.getRequiredPermission());
+        List<ProgressService.RequirementProgress> reqs =
+                plugin.getApi().getProgressService().getRequirementProgress(player, rank);
+
+        if (reqs.isEmpty()) {
+            lore.add("");
+            lore.add("§7No requirements to advance.");
+        } else {
+            lore.add("");
+            lore.add("§8§m──────────────────────────");
+            for (ProgressService.RequirementProgress rp : reqs) {
+                lore.add(rp.toDisplayLine());
+            }
         }
 
         lore.add("");
-        lore.add(meetsAll ? "§a✔ §lAll requirements met! §eClick to rank up." : "§c✘ §lRequirements not yet met.");
+        lore.add(meetsAll
+                ? "§a§l✔ All requirements met! §eClick to rank up."
+                : "§c§l✘ Requirements not yet met.");
 
         meta.setLore(lore);
         item.setItemMeta(meta);
@@ -148,48 +164,46 @@ public class AnimatedRankTreeGUI {
         String currentId = getCurrentRankId(player);
         String nextId    = plugin.getRankManager().getNextRankId(currentId);
 
-        // Max rank state
         if (nextId == null || nextId.isBlank()) {
-            ItemStack maxItem = new ItemStack(Material.BEDROCK);
-            ItemMeta maxMeta = maxItem.getItemMeta();
+            ItemStack maxItem = new ItemStack(Material.NETHER_STAR);
+            ItemMeta  maxMeta = maxItem.getItemMeta();
             if (maxMeta != null) {
-                maxMeta.setDisplayName("§6§lProgression");
-                maxMeta.setLore(List.of("§7You have unlocked all available ranks!"));
+                maxMeta.setDisplayName("§6§l✦ Maximum Rank Achieved ✦");
+                maxMeta.setLore(List.of(
+                        "",
+                        "§7You have reached the highest rank",
+                        "§7on the server. Congratulations!",
+                        ""
+                ));
                 maxItem.setItemMeta(maxMeta);
             }
             inv.setItem(49, maxItem);
             return;
         }
 
-        // Fetch the target Next Rank model directly by ID.
         RankModel nextRank = plugin.getRankManager().getRank(nextId);
         if (nextRank == null) return;
 
         Material mat;
-        try {
-            mat = Material.valueOf(nextRank.getMaterial());
-        } catch (IllegalArgumentException e) {
-            mat = Material.BOOK;
-        }
+        try { mat = Material.valueOf(nextRank.getMaterial()); }
+        catch (IllegalArgumentException e) { mat = Material.BOOK; }
 
         boolean canRankUp = plugin.getRequirementManager().meetsAll(player, nextRank.getId());
+        double  pct       = plugin.getApi().getProgressService().getPercent(player);
+        String  bar       = ProgressService.buildBar(pct, 20);
 
-        ItemStack item = new ItemStack(mat);
-        ItemMeta meta = item.getItemMeta();
+        ItemStack item = new ItemStack(canRankUp ? Material.EMERALD : mat);
+        ItemMeta  meta = item.getItemMeta();
         if (meta != null) {
-            meta.setDisplayName("§e§lNext Rank: " + nextRank.getDisplayName());
-            List<String> lore = new java.util.ArrayList<>();
+            meta.setDisplayName("§e§l➤ Next: " + nextRank.getDisplayName());
+            List<String> lore = new ArrayList<>();
             lore.add("");
-            if (nextRank.getRequiredMoney() > 0)
-                lore.add("§7Cost:      §a$" + String.format("%,.0f", nextRank.getRequiredMoney()));
-            if (nextRank.getRequiredXpLevel() > 0)
-                lore.add("§7XP Level:  §aLevel " + nextRank.getRequiredXpLevel());
-            if (nextRank.getRequiredPermission() != null && !nextRank.getRequiredPermission().isBlank())
-                lore.add("§7Perm:      §a" + nextRank.getRequiredPermission());
+            lore.add("§7Overall progress:");
+            lore.add("§8 [" + bar + "§8] §e" + String.format("%.1f", pct) + "§7%");
             lore.add("");
             lore.add(canRankUp
-                    ? "§a✔ §lRequirements met — Click the rank to advance!"
-                    : "§c✘ §7Requirements not yet met.");
+                    ? "§a§l✔ Click the rank above to advance!"
+                    : "§c§l✘ Keep working toward the requirements.");
             meta.setLore(lore);
             item.setItemMeta(meta);
         }
@@ -222,6 +236,15 @@ public class AnimatedRankTreeGUI {
         return cache.contains(player.getUniqueId())
                 ? cache.get(player.getUniqueId()).rankId()
                 : plugin.getRankManager().getDefaultRankId();
+    }
+
+    private double safeBalance(Player player) {
+        try {
+            if (plugin.getSoftDependency() != null && plugin.getSoftDependency().hasVault()) {
+                return plugin.getSoftDependency().getBalance(player);
+            }
+        } catch (Exception ignored) {}
+        return 0.0;
     }
 
     public static boolean isOpen(UUID uuid)    { return OPEN_VIEWERS.contains(uuid); }

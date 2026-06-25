@@ -61,7 +61,6 @@ cosmetic:
     enabled: true
     # How long (in seconds) the rankup particle trail lasts before auto-expiring.
     # Set to 0 to disable the timed trail entirely.
-    # The login/restore trail is always permanent (no expiry).
     rankup-trail-duration-seconds: 30
     ranks:
       Member:  "VILLAGER_HAPPY"

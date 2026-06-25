@@ -35,26 +35,26 @@ public final class RankModel {
     private final Map<String, Integer> requiredItems;
 
     private RankModel(Builder b) {
-        this.id                      = b.id;
-        this.displayName             = b.displayName;
-        this.nextRankId              = b.nextRankId;
+        this.id                      = b.id != null ? b.id : "";
+        this.displayName             = b.displayName != null ? b.displayName : "";
+        this.nextRankId              = b.nextRankId != null ? b.nextRankId : "";
         this.slot                    = b.slot;
-        this.material                = b.material;
-        this.lore                    = List.copyOf(b.lore);
-        this.chatPrefix              = b.chatPrefix;
-        this.permissions             = List.copyOf(b.permissions);
-        this.commands                = List.copyOf(b.commands);
+        this.material                = b.material != null ? b.material : "GRAY_WOOL";
+        this.lore                    = b.lore != null ? List.copyOf(b.lore) : List.of();
+        this.chatPrefix              = b.chatPrefix != null ? b.chatPrefix : "";
+        this.permissions             = b.permissions != null ? List.copyOf(b.permissions) : List.of();
+        this.commands                = b.commands != null ? List.copyOf(b.commands) : List.of();
         this.requiredMoney           = b.requiredMoney;
         this.requiredXpLevel         = b.requiredXpLevel;
-        this.requiredPermission      = b.requiredPermission;
+        this.requiredPermission      = b.requiredPermission != null ? b.requiredPermission : "";
         this.requiredPlaytimeMinutes = b.requiredPlaytimeMinutes;
         this.requiredMobKills        = b.requiredMobKills;
         this.requiredBlockBreaks     = b.requiredBlockBreaks;
-        this.requiredStatisticId     = b.requiredStatisticId;
+        this.requiredStatisticId     = b.requiredStatisticId != null ? b.requiredStatisticId : "";
         this.requiredStatisticValue  = b.requiredStatisticValue;
-        this.requiredQuests          = List.copyOf(b.requiredQuests);
-        this.requiredWorlds          = List.copyOf(b.requiredWorlds);
-        this.requiredItems           = Map.copyOf(b.requiredItems);
+        this.requiredQuests          = b.requiredQuests != null ? List.copyOf(b.requiredQuests) : List.of();
+        this.requiredWorlds          = b.requiredWorlds != null ? List.copyOf(b.requiredWorlds) : List.of();
+        this.requiredItems           = b.requiredItems != null ? Map.copyOf(b.requiredItems) : Map.of();
     }
 
     // ── Accessors ─────────────────────────────────────────────────────────────
@@ -128,50 +128,54 @@ public final class RankModel {
         private List<String>        requiredWorlds          = new ArrayList<>();
         private Map<String, Integer> requiredItems          = new LinkedHashMap<>();
 
-        public Builder(String id) { this.id = id; }
-
-        public Builder(RankModel src) {
-            this.id                      = src.id;
-            this.displayName             = src.displayName;
-            this.nextRankId              = src.nextRankId;
-            this.slot                    = src.slot;
-            this.material                = src.material;
-            this.lore                    = new ArrayList<>(src.lore);
-            this.chatPrefix              = src.chatPrefix;
-            this.permissions             = new ArrayList<>(src.permissions);
-            this.commands                = new ArrayList<>(src.commands);
-            this.requiredMoney           = src.requiredMoney;
-            this.requiredXpLevel         = src.requiredXpLevel;
-            this.requiredPermission      = src.requiredPermission;
-            this.requiredPlaytimeMinutes = src.requiredPlaytimeMinutes;
-            this.requiredMobKills        = src.requiredMobKills;
-            this.requiredBlockBreaks     = src.requiredBlockBreaks;
-            this.requiredStatisticId     = src.requiredStatisticId;
-            this.requiredStatisticValue  = src.requiredStatisticValue;
-            this.requiredQuests          = new ArrayList<>(src.requiredQuests);
-            this.requiredWorlds          = new ArrayList<>(src.requiredWorlds);
-            this.requiredItems           = new LinkedHashMap<>(src.requiredItems);
+        public Builder(String id) { 
+            this.id = id != null ? id : ""; 
         }
 
-        public Builder displayName(String v)                  { this.displayName = v;                               return this; }
-        public Builder nextRankId(String v)                   { this.nextRankId = v;                                return this; }
-        public Builder slot(int v)                            { this.slot = v;                                      return this; }
-        public Builder material(String v)                     { this.material = v;                                  return this; }
-        public Builder lore(List<String> v)                   { this.lore = new ArrayList<>(v);                    return this; }
-        public Builder chatPrefix(String v)                   { this.chatPrefix = v;                                return this; }
-        public Builder permissions(List<String> v)            { this.permissions = new ArrayList<>(v);              return this; }
-        public Builder commands(List<String> v)               { this.commands = new ArrayList<>(v);                 return this; }
-        public Builder requiredMoney(double v)                { this.requiredMoney = v;                             return this; }
-        public Builder requiredXpLevel(int v)                 { this.requiredXpLevel = v;                          return this; }
-        public Builder requiredPermission(String v)           { this.requiredPermission = v;                        return this; }
-        public Builder requiredPlaytimeMinutes(long v)        { this.requiredPlaytimeMinutes = v;                  return this; }
-        public Builder requiredMobKills(int v)                { this.requiredMobKills = v;                         return this; }
-        public Builder requiredBlockBreaks(int v)             { this.requiredBlockBreaks = v;                      return this; }
-        public Builder requiredStatisticId(String v)          { this.requiredStatisticId = v != null ? v : "";      return this; }
-        public Builder requiredStatisticValue(int v)          { this.requiredStatisticValue = v;                   return this; }
-        public Builder requiredQuests(List<String> v)         { this.requiredQuests = new ArrayList<>(v);           return this; }
-        public Builder requiredWorlds(List<String> v)         { this.requiredWorlds = new ArrayList<>(v);           return this; }
-        public Builder requiredItems(Map<String, Integer> v)  { this.requiredItems = new LinkedHashMap<>(v);        return this; }
+        public Builder(RankModel src) {
+            if (src != null) {
+                this.id                      = src.id;
+                this.displayName             = src.displayName;
+                this.nextRankId              = src.nextRankId;
+                this.slot                    = src.slot;
+                this.material                = src.material;
+                this.lore                    = new ArrayList<>(src.lore);
+                this.chatPrefix              = src.chatPrefix;
+                this.permissions             = new ArrayList<>(src.permissions);
+                this.commands                = new ArrayList<>(src.commands);
+                this.requiredMoney           = src.requiredMoney;
+                this.requiredXpLevel         = src.requiredXpLevel;
+                this.requiredPermission      = src.requiredPermission;
+                this.requiredPlaytimeMinutes = src.requiredPlaytimeMinutes;
+                this.requiredMobKills        = src.requiredMobKills;
+                this.requiredBlockBreaks     = src.requiredBlockBreaks;
+                this.requiredStatisticId     = src.requiredStatisticId;
+                this.requiredStatisticValue  = src.requiredStatisticValue;
+                this.requiredQuests          = new ArrayList<>(src.requiredQuests);
+                this.requiredWorlds          = new ArrayList<>(src.requiredWorlds);
+                this.requiredItems           = new LinkedHashMap<>(src.requiredItems);
+            }
+        }
+
+        public Builder displayName(String v)                  { this.displayName = v != null ? v : "";             return this; }
+        public Builder nextRankId(String v)                   { this.nextRankId = v != null ? v : "";              return this; }
+        public Builder slot(int v)                            { this.slot = v;                                     return this; }
+        public Builder material(String v)                     { this.material = v != null ? v : "GRAY_WOOL";       return this; }
+        public Builder lore(List<String> v)                   { this.lore = v != null ? new ArrayList<>(v) : new ArrayList<>(); return this; }
+        public Builder chatPrefix(String v)                   { this.chatPrefix = v != null ? v : "";              return this; }
+        public Builder permissions(List<String> v)            { this.permissions = v != null ? new ArrayList<>(v) : new ArrayList<>(); return this; }
+        public Builder commands(List<String> v)               { this.commands = v != null ? new ArrayList<>(v) : new ArrayList<>(); return this; }
+        public Builder requiredMoney(double v)                { this.requiredMoney = v;                            return this; }
+        public Builder requiredXpLevel(int v)                 { this.requiredXpLevel = v;                         return this; }
+        public Builder requiredPermission(String v)           { this.requiredPermission = v != null ? v : "";      return this; }
+        public Builder requiredPlaytimeMinutes(long v)        { this.requiredPlaytimeMinutes = v;                 return this; }
+        public Builder requiredMobKills(int v)                { this.requiredMobKills = v;                        return this; }
+        public Builder requiredBlockBreaks(int v)             { this.requiredBlockBreaks = v;                     return this; }
+        public Builder requiredStatisticId(String v)          { this.requiredStatisticId = v != null ? v : "";     return this; }
+        public Builder requiredStatisticValue(int v)          { this.requiredStatisticValue = v;                  return this; }
+        public Builder requiredQuests(List<String> v)         { this.requiredQuests = v != null ? new ArrayList<>(v) : new ArrayList<>(); return this; }
+        public Builder requiredWorlds(List<String> v)         { this.requiredWorlds = v != null ? new ArrayList<>(v) : new ArrayList<>(); return this; }
+        public Builder requiredItems(Map<String, Integer> v)  { this.requiredItems = v != null ? new LinkedHashMap<>(v) : new LinkedHashMap<>(); return this; }
 
         public RankModel build() { return new RankModel(this); }
     }

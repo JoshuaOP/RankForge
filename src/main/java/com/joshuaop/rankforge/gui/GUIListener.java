@@ -84,7 +84,8 @@ public class GUIListener implements Listener {
         if (AdminRankEditorGUI.TITLE.equals(title))     AdminRankEditorGUI.setClosed(uuid);
         if (DragDropRankEditorGUI.TITLE.equals(title))  DragDropRankEditorGUI.setClosed(uuid);
         if (RankDetailEditorGUI.matchesTitle(title))    RankDetailEditorGUI.setClosed(uuid);
-        if (PlayerDataEditorGUI.matchesTitle(title))    PlayerDataEditorGUI.setClosed(uuid); // Fixed: Keeps closing track handled via editor instance bounds
+        if (PlayerListGUI.TITLE.equals(title))          PlayerListGUI.closeFor(uuid);
+        if (PlayerDataEditorGUI.matchesTitle(title))    PlayerDataEditorGUI.setClosed(uuid);
     }
 
     // ── Chat-based editing ────────────────────────────────────────────────────

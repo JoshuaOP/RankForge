@@ -28,15 +28,18 @@ public class RankManager {
     }
 
     public void loadRanks() {
-        // Read directly from ranks.yml via your custom YAML configuration loader layer
-        String yamlDefault = plugin.getRankYamlManager().getConfig().getString("default-rank", "Guest");
-        
-        // Fallback safety guard
-        this.defaultRankId = (yamlDefault == null || yamlDefault.isBlank()) ? "Guest" : yamlDefault;
-
         synchronized (lock) {
-            LinkedHashMap<String, RankModel> fetchedRanks = plugin.getRankYamlManager().getRanks();
-            this.ranks = fetchedRanks != null ? fetchedRanks : new LinkedHashMap<>();
+            // REVISION: Pulled configuration pulling inside the lock block to guarantee atomic lifecycle state
+            if (plugin.getRankYamlManager() != null && plugin.getRankYamlManager().getConfig() != null) {
+                String yamlDefault = plugin.getRankYamlManager().getConfig().getString("default-rank", "Guest");
+                this.defaultRankId = (yamlDefault == null || yamlDefault.isBlank()) ? "Guest" : yamlDefault;
+                
+                LinkedHashMap<String, RankModel> fetchedRanks = plugin.getRankYamlManager().getRanks();
+                this.ranks = fetchedRanks != null ? fetchedRanks : new LinkedHashMap<>();
+            } else {
+                this.defaultRankId = "Guest";
+                this.ranks = new LinkedHashMap<>();
+            }
             
             if (plugin.isDebug()) {
                 plugin.getLogger().info("[Ranks] Indexed " + this.ranks.size() + " ranks.");
@@ -45,14 +48,14 @@ public class RankManager {
     }
 
     public void updateModel(RankModel model) {
-        if (model == null || model.getId() == null) return;
+        if (model == null || model.getId() == null || model.getId().isEmpty()) return;
         synchronized (lock) {
             ranks.put(model.getId(), model);
         }
     }
 
     public void removeModel(String rankId) {
-        if (rankId == null) return;
+        if (rankId == null || rankId.isEmpty()) return;
         synchronized (lock) {
             ranks.remove(rankId);
         }
@@ -60,7 +63,7 @@ public class RankManager {
 
     /** Returns the RankModel for the given ID, or null if not found. */
     public RankModel getRank(String rankId) {
-        if (rankId == null) return null;
+        if (rankId == null || rankId.isEmpty()) return null;
         synchronized (lock) {
             return ranks.get(rankId);
         }
@@ -70,15 +73,17 @@ public class RankManager {
         return defaultRankId; 
     }
 
+    // REVISION: Switched from List.copyOf (high allocations) to an unmodifiable collection view
     public Collection<RankModel> getModelList() {
         synchronized (lock) {
-            return List.copyOf(ranks.values());
+            return Collections.unmodifiableCollection(ranks.values());
         }
     }
 
+    // REVISION: Switched from Set.copyOf to an unmodifiable set view for constant-time lookups
     public Set<String> getRankIds() {
         synchronized (lock) {
-            return Set.copyOf(ranks.keySet());
+            return Collections.unmodifiableSet(ranks.keySet());
         }
     }
 
@@ -93,7 +98,8 @@ public class RankManager {
     public RankModel getRankAtSlot(int slot) {
         synchronized (lock) {
             for (RankModel rank : ranks.values()) {
-                if (rank != null && rank.getSlot() == slot) {
+                // RankModel is non-null guaranteed by our updated builder framework
+                if (rank.getSlot() == slot) {
                     return rank;
                 }
             }
@@ -102,18 +108,18 @@ public class RankManager {
     }
 
     public String getNextRankId(String rankId) {
-        if (rankId == null) return "";
+        if (rankId == null || rankId.isEmpty()) return "";
         synchronized (lock) {
             RankModel data = ranks.get(rankId);
-            return data != null && data.getNextRankId() != null ? data.getNextRankId() : "";
+            return data != null ? data.getNextRankId() : "";
         }
     }
 
     public String getDisplayName(String rankId) {
-        if (rankId == null) return "";
+        if (rankId == null || rankId.isEmpty()) return "";
         synchronized (lock) {
             RankModel data = ranks.get(rankId);
-            return data != null && data.getDisplayName() != null ? data.getDisplayName() : "§7" + rankId;
+            return data != null ? data.getDisplayName() : "§7" + rankId;
         }
     }
 
@@ -133,19 +139,20 @@ public class RankManager {
     public void repairOrphanedRanks() {
         String fallback = defaultRankId;
 
-        // If the configured default itself was removed, fall back to the first loaded rank.
         if (getRank(fallback) == null) {
             synchronized (lock) {
                 fallback = ranks.isEmpty() ? null : ranks.keySet().iterator().next();
             }
         }
-        if (fallback == null) return; // No ranks loaded at all — nothing to repair to.
+        if (fallback == null) return;
 
         final String effectiveFallback = fallback;
+        
+        // REVISION: Ensure the condition check runs against the locked map safely via our accessor method
         cacheManager.repairOrphanedRankIds(rankId -> getRank(rankId) != null, effectiveFallback);
 
         if (plugin.isDebug()) {
-            plugin.getLogger().info("[RankManager] Orphaned rank repair complete (fallback='" + effectiveFallback + "').");
+            plugin.getLogger().info("[RankManager] Rank repair complete (fallback='" + effectiveFallback + "').");
         }
     }
 }

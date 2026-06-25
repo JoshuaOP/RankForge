@@ -42,12 +42,7 @@ import org.bukkit.plugin.java.JavaPlugin;
  */
 public final class RankForge extends JavaPlugin {
 
-    /**
-     * bStats plugin ID — registered at https://bstats.org/plugin/bukkit/RankForge
-     * Metrics are always enabled and cannot be disabled.
-     */
     private static final int BSTATS_PLUGIN_ID = 31704;
-
     private static RankForge instance;
 
     // ── Core ──────────────────────────────────────────────────────────────────
@@ -89,8 +84,6 @@ public final class RankForge extends JavaPlugin {
     private ExternalGUIRegistry       externalGUIRegistry;
     private RestAPIServer             restAPIServer;
 
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
-
     @Override
     public void onEnable() {
         instance = this;
@@ -99,7 +92,7 @@ public final class RankForge extends JavaPlugin {
         runConfigUpdater();
         initLang();
         initDatabase();
-        initYaml();
+        initYaml(); // REVISION: Kept before core managers so assets like guiConfig exist early
         initCoreManagers();
         initExperienceSystems();
         initAPIEcosystem();
@@ -111,24 +104,32 @@ public final class RankForge extends JavaPlugin {
         initMetrics();
 
         getLogger().info("RankForge v" + getDescription().getVersion() + " successfully loaded! ("
-                + rankManager.getRankCount() + " ranks compiled)");
+                + (rankManager != null ? rankManager.getRankCount() : 0) + " ranks compiled)");
     }
 
     @Override
     public void onDisable() {
+        // Shutdown networking and schedules immediately to prevent async state corruption
         if (restAPIServer      != null) restAPIServer.stop();
         if (expansionRegistry  != null) expansionRegistry.disableAll();
         if (performanceManager != null) performanceManager.stop();
         if (taskScheduler      != null) taskScheduler.cancelAll();
         if (cosmeticManager    != null) cosmeticManager.shutdown();
 
-        // Flush block-break counters before saving so no break counts are lost.
-        if (blockBreakTracker != null) blockBreakTracker.flushAll();
+        if (blockBreakTracker  != null) blockBreakTracker.flushAll();
 
+        // REVISION: Safer fall-through sync framework logic during unbind phases
         if (rankManager != null && rankManager.getCacheManager() != null) {
-            if (databaseManager != null && databaseManager.isConnected() && syncService != null) {
-                syncService.flushNow();
-                syncService.stop();
+            if (syncService != null && databaseManager != null && databaseManager.isConnected()) {
+                try {
+                    syncService.flushNow();
+                    syncService.stop();
+                } catch (Exception e) {
+                    getLogger().severe("SQL pipeline flush failed, attempting emergency YAML writeback: " + e.getMessage());
+                    if (yamlPlayerDataStorage != null) {
+                        yamlPlayerDataStorage.saveAll(rankManager.getCacheManager().getOnlineAndUnexpired());
+                    }
+                }
             } else if (yamlPlayerDataStorage != null) {
                 yamlPlayerDataStorage.saveAll(rankManager.getCacheManager().getOnlineAndUnexpired());
             }
@@ -138,8 +139,6 @@ public final class RankForge extends JavaPlugin {
         if (databaseManager != null) databaseManager.disconnect();
         getLogger().info("RankForge disabled safely.");
     }
-
-    // ── Init phases ───────────────────────────────────────────────────────────
 
     private void runConfigUpdater() {
         configUpdater = new ConfigUpdater(this);
@@ -172,10 +171,12 @@ public final class RankForge extends JavaPlugin {
         rankManager = new RankManager(this);
         rankManager.loadRanks();
 
-        if (!databaseManager.isConnected() && yamlPlayerDataStorage != null) {
+        if (databaseManager != null && !databaseManager.isConnected() && yamlPlayerDataStorage != null) {
             var stored = yamlPlayerDataStorage.loadAll();
-            for (var pd : stored) {
-                rankManager.getCacheManager().put(pd.uuid(), pd);
+            if (stored != null) {
+                for (var pd : stored) {
+                    rankManager.getCacheManager().put(pd.uuid(), pd);
+                }
             }
         }
 
@@ -191,10 +192,7 @@ public final class RankForge extends JavaPlugin {
         antiAbuseManager      = new AntiAbuseManager(this);
         rankupQueue           = new RankupQueue();
         cosmeticManager       = new CosmeticManager(this);
-
-        // BlockBreakTracker must be initialised before registerListeners()
-        // so the join event populates counters before the first break occurs.
-        blockBreakTracker = new BlockBreakTracker(this);
+        blockBreakTracker     = new BlockBreakTracker(this);
     }
 
     private void initExperienceSystems() {
@@ -221,11 +219,6 @@ public final class RankForge extends JavaPlugin {
         permissionNodeGenerator.generateAll();
     }
 
-    /**
-     * Initialise bStats metrics.
-     * Metrics are always enabled — no config toggle.
-     * bStats respects the global opt-out at plugins/bStats/config.yml.
-     */
     private void initMetrics() {
         try {
             new Metrics(this, BSTATS_PLUGIN_ID);
@@ -248,72 +241,91 @@ public final class RankForge extends JavaPlugin {
     private void registerListeners() {
         getServer().getPluginManager().registerEvents(new GUIListener(this), this);
         getServer().getPluginManager().registerEvents(softDependency, this);
-        // BlockBreakTracker handles PlayerJoinEvent, PlayerQuitEvent, and BlockBreakEvent.
         getServer().getPluginManager().registerEvents(blockBreakTracker, this);
-        cosmeticManager.registerListeners();
+        if (cosmeticManager != null) cosmeticManager.registerListeners();
     }
 
     private void postInit() {
-        if (databaseManager.isConnected()) syncService.start();
+        if (databaseManager != null && databaseManager.isConnected() && syncService != null) {
+            syncService.start();
+        }
 
-        performanceManager.start();
+        if (performanceManager != null) performanceManager.start();
 
-        if (softDependency.hasPapi()) {
+        if (softDependency != null && softDependency.hasPapi()) {
             new RankForgePlaceholders(this).register();
         }
 
-        taskScheduler.repeatAsync(() -> rankManager.getCacheManager().purgeExpired(), 6000L, 6000L);
-        taskScheduler.repeatAsync(() -> antiAbuseManager.purge(), 2400L, 2400L);
+        startRepeatingTasks();
 
-        // Periodic block-break flush to keep cache entries current between syncs.
-        long blockFlushInterval = getConfig().getLong("tracker.block-break-flush-ticks", 100L);
+        if (restAPIServer != null) restAPIServer.start();
+    }
+
+    // REVISION: Abstracted repeating background registrations to simplify logic reuse inside reloads
+    private void startRepeatingTasks() {
+        if (taskScheduler == null) return;
+        
+        taskScheduler.repeatAsync(() -> {
+            if (rankManager != null && rankManager.getCacheManager() != null) {
+                rankManager.getCacheManager().purgeExpired();
+            }
+        }, 6000L, 6000L);
+        
+        taskScheduler.repeatAsync(() -> {
+            if (antiAbuseManager != null) antiAbuseManager.purge();
+        }, 2400L, 2400L);
+
+        long blockFlushInterval = getConfig() != null ? getConfig().getLong("tracker.block-break-flush-ticks", 100L) : 100L;
         taskScheduler.repeatAsync(() -> {
             if (blockBreakTracker != null) blockBreakTracker.flushAll();
         }, blockFlushInterval, blockFlushInterval);
 
-        if (!databaseManager.isConnected()) {
-            long yamlSyncInterval = getConfig().getLong("sync.interval-ticks", 200L);
+        if (databaseManager != null && !databaseManager.isConnected()) {
+            long yamlSyncInterval = getConfig() != null ? getConfig().getLong("sync.interval-ticks", 200L) : 200L;
             taskScheduler.repeatAsync(() -> {
-                if (yamlPlayerDataStorage != null) {
+                if (yamlPlayerDataStorage != null && rankManager != null && rankManager.getCacheManager() != null) {
                     var snapshot = rankManager.getCacheManager().getOnlineAndUnexpired();
                     if (!snapshot.isEmpty()) yamlPlayerDataStorage.saveAll(snapshot);
                 }
             }, yamlSyncInterval, yamlSyncInterval);
         }
-
-        restAPIServer.start();
     }
 
     // ── Hot-reload ────────────────────────────────────────────────────────────
 
     public void reload() {
-        // Stop all active particle tasks before reloading so no orphaned schedulers survive.
+        // REVISION: Cleared active schedules to avoid concurrent worker thread creep
+        if (taskScheduler != null) taskScheduler.cancelAll();
         if (cosmeticManager != null) cosmeticManager.shutdown();
 
         configUpdater.updateAll();
         reloadConfig();
-        langManager.loadAll();
-        rankYamlManager.hotReload();
-        rankManager.loadRanks();
+        if (langManager != null) langManager.loadAll();
+        if (rankYamlManager != null) rankYamlManager.hotReload();
+        if (rankManager != null) {
+            rankManager.loadRanks();
+            rankManager.repairOrphanedRanks();
+        }
 
-        // Repair any cached player data whose rank no longer exists after the reload.
-        rankManager.repairOrphanedRanks();
-
-        soundManager.reload();
-        antiBypassManager.reload();
-        expansionRegistry.reloadAll();
+        if (soundManager != null) soundManager.reload();
+        if (antiBypassManager != null) antiBypassManager.reload();
+        if (expansionRegistry != null) expansionRegistry.reloadAll();
         if (guiConfig != null) guiConfig.load();
-        // Clear offline player head reference cache so stale skin data is not served.
+        
         com.joshuaop.rankforge.gui.PlayerListGUI.clearHeadCache();
 
-        // Restart cosmetics for all currently online players using their (possibly repaired) rank.
-        if (cosmeticManager != null) {
+        // Restart repeating loops cleanly
+        startRepeatingTasks();
+
+        if (cosmeticManager != null && rankManager != null) {
             var cache = rankManager.getCacheManager();
-            for (Player online : Bukkit.getOnlinePlayers()) {
-                String rankId = cache.contains(online.getUniqueId())
-                        ? cache.get(online.getUniqueId()).rankId()
-                        : rankManager.getDefaultRankId();
-                cosmeticManager.onLogin(online, rankId);
+            if (cache != null) {
+                for (Player online : Bukkit.getOnlinePlayers()) {
+                    String rankId = cache.contains(online.getUniqueId())
+                            ? cache.get(online.getUniqueId()).rankId()
+                            : rankManager.getDefaultRankId();
+                    cosmeticManager.onLogin(online, rankId);
+                }
             }
         }
 
@@ -322,9 +334,8 @@ public final class RankForge extends JavaPlugin {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /** @return true if debug logging is enabled in config.yml */
     public boolean isDebug() {
-        return getConfig().getBoolean("debug", false);
+        return getConfig() != null && getConfig().getBoolean("debug", false);
     }
 
     // ── Getters ───────────────────────────────────────────────────────────────

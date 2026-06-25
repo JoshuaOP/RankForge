@@ -69,36 +69,52 @@ public class AdminRankEditorGUI {
         meta.setDisplayName("§6§l✎ §e" + r.getDisplayName() + " §8[" + r.getId() + "]");
 
         List<String> lore = new ArrayList<>();
-        lore.add("§7Next rank:     §e" + (r.getNextRankId().isBlank() ? "§cMAX" : r.getNextRankId()));
-        lore.add("§7Slot:          §e" + r.getSlot());
-        lore.add("§7Material:      §e" + r.getMaterial());
+        lore.add("§8§m──────────────────────────");
+        lore.add("§7Next Rank:    §e" + (r.getNextRankId().isBlank() ? "§c§lMAX" : r.getNextRankId()));
+        lore.add("§7Slot:         §e" + r.getSlot() + "  §7Material: §e" + r.getMaterial());
+        lore.add("§7Prefix:       §r" + (r.getChatPrefix().isBlank() ? "§8None" : r.getChatPrefix()));
+        lore.add("§7Commands:     §e" + r.getCommands().size()
+                + "  §7Permissions: §e" + r.getPermissions().size());
 
-        if (r.getRequiredMoney() > 0)
-            lore.add("§7Money:         §a$" + String.format("%,.0f", r.getRequiredMoney()));
-        if (r.getRequiredXpLevel() > 0)
-            lore.add("§7XP Level:      §a" + r.getRequiredXpLevel());
-        if (r.getRequiredPermission() != null && !r.getRequiredPermission().isBlank())
-            lore.add("§7Permission:    §a" + r.getRequiredPermission());
-        if (r.getRequiredPlaytimeMinutes() > 0)
-            lore.add("§7Playtime:      §a" + FormatUtil.formatTime(r.getRequiredPlaytimeMinutes()));
-        if (r.getRequiredMobKills() > 0)
-            lore.add("§7Mob Kills:     §a" + r.getRequiredMobKills());
-        if (r.getRequiredBlockBreaks() > 0)
-            lore.add("§7Block Breaks:  §a" + r.getRequiredBlockBreaks());
-        if (r.getRequiredStatisticId() != null && !r.getRequiredStatisticId().isBlank())
-            lore.add("§7Statistic:     §a" + r.getRequiredStatisticId() + "≥" + r.getRequiredStatisticValue());
-        if (!r.getRequiredQuests().isEmpty())
-            lore.add("§7Quests:        §a" + r.getRequiredQuests().size() + " required");
-        if (!r.getRequiredWorlds().isEmpty())
-            lore.add("§7Worlds:        §a" + String.join("§8,§a", r.getRequiredWorlds()));
-        if (!r.getRequiredItems().isEmpty())
-            lore.add("§7Items:         §a" + r.getRequiredItems().size() + " type(s) required");
+        boolean hasReqs = r.getRequiredMoney() > 0 || r.getRequiredXpLevel() > 0
+                || (r.getRequiredPermission() != null && !r.getRequiredPermission().isBlank())
+                || r.getRequiredPlaytimeMinutes() > 0 || r.getRequiredMobKills() > 0
+                || r.getRequiredBlockBreaks() > 0
+                || (r.getRequiredStatisticId() != null && !r.getRequiredStatisticId().isBlank())
+                || !r.getRequiredQuests().isEmpty() || !r.getRequiredWorlds().isEmpty()
+                || !r.getRequiredItems().isEmpty();
 
-        lore.add("§7Chat prefix:   §e" + (r.getChatPrefix().isBlank() ? "§8None" : r.getChatPrefix()));
-        lore.add("§7Commands:      §e" + r.getCommands().size());
-        lore.add("§7Permissions:   §e" + r.getPermissions().size());
-        lore.add("");
-        lore.add("§b» Click to open detail editor");
+        if (hasReqs) {
+            lore.add("§8§m──────────────────────────");
+            lore.add("§7§lRequirements:");
+            if (r.getRequiredMoney() > 0)
+                lore.add("  §8• §7Money:        §a$" + String.format("%,.0f", r.getRequiredMoney()));
+            if (r.getRequiredXpLevel() > 0)
+                lore.add("  §8• §7XP Level:     §aLevel " + r.getRequiredXpLevel());
+            if (r.getRequiredPermission() != null && !r.getRequiredPermission().isBlank())
+                lore.add("  §8• §7Permission:   §a" + r.getRequiredPermission());
+            if (r.getRequiredPlaytimeMinutes() > 0)
+                lore.add("  §8• §7Playtime:     §a" + FormatUtil.formatTime(r.getRequiredPlaytimeMinutes()));
+            if (r.getRequiredMobKills() > 0)
+                lore.add("  §8• §7Mob Kills:    §a" + String.format("%,d", r.getRequiredMobKills()));
+            if (r.getRequiredBlockBreaks() > 0)
+                lore.add("  §8• §7Block Breaks: §a" + String.format("%,d", r.getRequiredBlockBreaks()));
+            if (r.getRequiredStatisticId() != null && !r.getRequiredStatisticId().isBlank())
+                lore.add("  §8• §7Statistic:    §a" + r.getRequiredStatisticId()
+                        + " ≥ " + String.format("%,d", r.getRequiredStatisticValue()));
+            if (!r.getRequiredQuests().isEmpty())
+                lore.add("  §8• §7Quests:       §a" + r.getRequiredQuests().size() + " required");
+            if (!r.getRequiredWorlds().isEmpty())
+                lore.add("  §8• §7Worlds:       §a" + String.join("§8, §a", r.getRequiredWorlds()));
+            if (!r.getRequiredItems().isEmpty())
+                lore.add("  §8• §7Items:        §a" + r.getRequiredItems().size() + " type(s)");
+        } else {
+            lore.add("§8§m──────────────────────────");
+            lore.add("§7Requirements:  §8None");
+        }
+
+        lore.add("§8§m──────────────────────────");
+        lore.add("§b§l» §bClick to open detail editor");
 
         meta.setLore(lore);
         item.setItemMeta(meta);

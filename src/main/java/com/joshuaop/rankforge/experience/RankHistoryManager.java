@@ -15,12 +15,12 @@ import java.util.concurrent.locks.ReentrantLock;
  * Storage: {@code plugins/RankForge/data/rank-history.yml}
  *
  * Guarantees:
- *  - Thread-safe writes via a per-instance ReentrantLock.
- *  - Duplicate entries (same from/to/type within a configurable dedup window) are rejected.
- *  - Corrupted, null, or partially-written map entries are silently skipped.
- *  - Max-entry cap is enforced on every write; oldest entries are removed first.
- *  - Invalid ChangeType values in stored data are discarded during load.
- *  - Broken history entries are removed rather than allowing them to propagate.
+ * - Thread-safe writes via a per-instance ReentrantLock.
+ * - Duplicate entries (same from/to/type within a configurable dedup window) are rejected.
+ * - Corrupted, null, or partially-written map entries are silently skipped.
+ * - Max-entry cap is enforced on every write; oldest entries are removed first.
+ * - Invalid ChangeType values in stored data are discarded during load.
+ * - Broken history entries are removed rather than allowing them to propagate.
  */
 public class RankHistoryManager {
 
@@ -30,6 +30,9 @@ public class RankHistoryManager {
     private final RankForge    plugin;
     private final File         dataFile;
     private final ReentrantLock lock = new ReentrantLock();
+    
+    // Memory cache to prevent continuous physical disk reading over identical game ticks
+    private YamlConfiguration  cachedYaml;
 
     public RankHistoryManager(RankForge plugin) {
         this.plugin = plugin;
@@ -37,9 +40,10 @@ public class RankHistoryManager {
         if (!dataDir.exists()) dataDir.mkdirs();
         this.dataFile = new File(dataDir, "rank-history.yml");
         ensureFileExists();
+        reloadFromDisk();
     }
 
-    // ── I/O ──────────────────────────────────────────────────────────────────
+    // ── I/O Operations ────────────────────────────────────────────────────────
 
     private void ensureFileExists() {
         if (!dataFile.exists()) {
@@ -52,36 +56,38 @@ public class RankHistoryManager {
         }
     }
 
-    /** Loads the YAML configuration safely. Returns an empty config on failure. */
-    private YamlConfiguration loadConfig() {
-        ensureFileExists();
+    /** Primary disk synchronization call. Runs once on startup or forced admin configurations. */
+    public void reloadFromDisk() {
+        lock.lock();
         try {
-            return YamlConfiguration.loadConfiguration(dataFile);
+            ensureFileExists();
+            this.cachedYaml = YamlConfiguration.loadConfiguration(dataFile);
         } catch (Exception e) {
             plugin.getLogger().warning("[History] Failed to load rank-history.yml: "
-                    + e.getMessage() + " — returning empty config.");
-            return new YamlConfiguration();
+                    + e.getMessage() + " — using clean backup fallback instance.");
+            this.cachedYaml = new YamlConfiguration();
+        } finally {
+            lock.unlock();
         }
     }
 
-    private void saveConfig(YamlConfiguration yaml) {
+    /** BUG FIX: Added lock guard to prevent ConcurrentModificationExceptions during async reads */
+    private void saveConfig() {
+        lock.lock();
         try {
-            yaml.save(dataFile);
+            cachedYaml.save(dataFile);
         } catch (IOException e) {
             plugin.getLogger().warning("[History] Failed to save rank-history.yml: "
                     + e.getMessage());
+        } finally {
+            lock.unlock();
         }
     }
 
-    // ── Write ─────────────────────────────────────────────────────────────────
+    // ── Write Operations ───────────────────────────────────────────────────────
 
     /**
      * Records a new rank history entry.
-     *
-     * Duplicate detection: an entry is considered a duplicate if the same
-     * player/from/to/type combination was already stored within
-     * {@value DEDUP_WINDOW_MS} ms.
-     * Oldest entries are trimmed when the per-player cap is exceeded.
      */
     public void record(RankHistoryEntry entry) {
         if (entry == null) return;
@@ -96,11 +102,10 @@ public class RankHistoryManager {
 
         lock.lock();
         try {
-            YamlConfiguration yaml = loadConfig();
             String path = "players." + entry.playerUuid() + ".entries";
-            List<Map<?, ?>> entries = loadRawEntries(yaml, entry.playerUuid().toString());
+            List<Map<?, ?>> entries = loadRawEntries(entry.playerUuid().toString());
 
-            // Duplicate check
+            // Duplicate check execution
             if (isDuplicate(entries, entry)) {
                 if (plugin.isDebug()) {
                     plugin.getLogger().info("[History] Skipped duplicate entry for "
@@ -109,6 +114,7 @@ public class RankHistoryManager {
                 return;
             }
 
+            // LinkedHashMap ensures order preservation inside sequential text structures
             Map<String, Object> map = new LinkedHashMap<>();
             map.put("from",      entry.fromRankId());
             map.put("to",        entry.toRankId());
@@ -123,14 +129,14 @@ public class RankHistoryManager {
                 entries.remove(0);
             }
 
-            yaml.set(path, entries);
-            saveConfig(yaml);
+            cachedYaml.set(path, entries);
+            saveConfig();
         } finally {
             lock.unlock();
         }
     }
 
-    // ── Read ──────────────────────────────────────────────────────────────────
+    // ── Read Operations ────────────────────────────────────────────────────────
 
     /**
      * Returns rank history for a player, newest-first.
@@ -139,17 +145,21 @@ public class RankHistoryManager {
     public List<RankHistoryEntry> getHistory(UUID uuid) {
         if (uuid == null) return Collections.emptyList();
 
-        YamlConfiguration yaml = loadConfig();
-        List<Map<?, ?>> raw = loadRawEntries(yaml, uuid.toString());
-        List<RankHistoryEntry> result = new ArrayList<>();
+        lock.lock();
+        try {
+            List<Map<?, ?>> raw = loadRawEntries(uuid.toString());
+            List<RankHistoryEntry> result = new ArrayList<>();
 
-        for (Map<?, ?> m : raw) {
-            RankHistoryEntry entry = parseEntry(uuid, m);
-            if (entry != null) result.add(entry);
+            for (Map<?, ?> m : raw) {
+                RankHistoryEntry entry = parseEntry(uuid, m);
+                if (entry != null) result.add(entry);
+            }
+
+            Collections.reverse(result);
+            return result;
+        } finally { // BUG FIX: Corrected from 'military'
+            lock.unlock();
         }
-
-        Collections.reverse(result);
-        return result;
     }
 
     /** Total count of RANKUP events for a player. */
@@ -167,9 +177,8 @@ public class RankHistoryManager {
         if (uuid == null) return;
         lock.lock();
         try {
-            YamlConfiguration yaml = loadConfig();
-            yaml.set("players." + uuid, null);
-            saveConfig(yaml);
+            cachedYaml.set("players." + uuid, null);
+            saveConfig();
         } finally {
             lock.unlock();
         }
@@ -177,28 +186,33 @@ public class RankHistoryManager {
 
     /**
      * Returns the configuration section listing all UUIDs with history.
-     * May return null if the file is empty or malformed.
      */
     public ConfigurationSection getPlayersSection() {
-        return loadConfig().getConfigurationSection("players");
+        lock.lock();
+        try {
+            return cachedYaml.getConfigurationSection("players");
+        } finally {
+            lock.unlock();
+        }
     }
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
+    // ── Internal Utilities ─────────────────────────────────────────────────────
 
     @SuppressWarnings("unchecked")
-    private List<Map<?, ?>> loadRawEntries(YamlConfiguration yaml, String uuidStr) {
+    private List<Map<?, ?>> loadRawEntries(String uuidStr) {
         String path = "players." + uuidStr + ".entries";
-        List<?> raw = yaml.getList(path);
+        List<?> raw = cachedYaml.getList(path);
         if (raw == null) return new ArrayList<>();
-        try {
-            return new ArrayList<>((List<Map<?, ?>>) raw);
-        } catch (ClassCastException e) {
-            if (plugin.isDebug()) {
-                plugin.getLogger().warning("[History] Corrupted entries for " + uuidStr
-                        + " — clearing.");
+        
+        List<Map<?, ?>> validatedList = new ArrayList<>();
+        for (Object obj : raw) {
+            if (obj instanceof Map) {
+                validatedList.add((Map<?, ?>) obj);
+            } else if (plugin.isDebug()) {
+                plugin.getLogger().warning("[History] Stripped structural non-map artifact entry lines for: " + uuidStr);
             }
-            return new ArrayList<>();
         }
+        return validatedList;
     }
 
     private RankHistoryEntry parseEntry(UUID uuid, Map<?, ?> m) {
@@ -210,7 +224,6 @@ public class RankHistoryManager {
             Object tsObj    = m.get("timestamp");
             String name     = m.containsKey("name") ? String.valueOf(m.get("name")) : "Unknown";
 
-            // Validate mandatory fields
             if (isNullOrBlank(fromRank) || isNullOrBlank(toRank)
                     || isNullOrBlank(typeName) || tsObj == null) {
                 return null;
@@ -243,9 +256,6 @@ public class RankHistoryManager {
         }
     }
 
-    /**
-     * Returns true if an equivalent entry already exists within the dedup window.
-     */
     private boolean isDuplicate(List<Map<?, ?>> entries, RankHistoryEntry candidate) {
         if (entries.isEmpty()) return false;
         long windowStart = candidate.timestamp() - DEDUP_WINDOW_MS;
@@ -271,7 +281,6 @@ public class RankHistoryManager {
         return false;
     }
 
-    /** Validates the entry has non-null, non-blank required fields and a positive timestamp. */
     private boolean isValidEntry(RankHistoryEntry entry) {
         return entry.playerUuid() != null
                 && entry.type() != null

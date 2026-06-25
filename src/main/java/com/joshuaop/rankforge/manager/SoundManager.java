@@ -6,6 +6,7 @@ import org.bukkit.entity.Player;
 
 /**
  * Plays configurable sounds to players on rankup, GUI open, and GUI click.
+ * Enhanced with legacy cross-version fallback protection mechanisms.
  */
 public class SoundManager {
 
@@ -29,15 +30,17 @@ public class SoundManager {
 
     public void reload() {
         enabled      = plugin.getConfig().getBoolean("sound.enabled", true);
-        rankupSound  = parseSound("sound.rankup.sound",    "ENTITY_PLAYER_LEVELUP");
+        
+        // Pass arrays of potential alternative names to support older server profiles natively
+        rankupSound  = parseSound("sound.rankup.sound",    "ENTITY_PLAYER_LEVELUP", "LEVEL_UP");
         rankupVolume = (float) plugin.getConfig().getDouble("sound.rankup.volume", 1.0);
         rankupPitch  = (float) plugin.getConfig().getDouble("sound.rankup.pitch",  1.0);
 
-        clickSound   = parseSound("sound.gui-click.sound", "UI_BUTTON_CLICK");
+        clickSound   = parseSound("sound.gui-click.sound", "UI_BUTTON_CLICK", "CLICK");
         clickVolume  = (float) plugin.getConfig().getDouble("sound.gui-click.volume", 0.5);
         clickPitch   = (float) plugin.getConfig().getDouble("sound.gui-click.pitch",  1.0);
 
-        openSound    = parseSound("sound.gui-open.sound",  "BLOCK_CHEST_OPEN");
+        openSound    = parseSound("sound.gui-open.sound",  "BLOCK_CHEST_OPEN", "CHEST_OPEN");
         openVolume   = (float) plugin.getConfig().getDouble("sound.gui-open.volume", 0.7);
         openPitch    = (float) plugin.getConfig().getDouble("sound.gui-open.pitch",  1.0);
     }
@@ -62,13 +65,32 @@ public class SoundManager {
             player.playSound(player.getLocation(), rankupSound, 1.0f, 1.0f);
     }
 
-    private Sound parseSound(String path, String fallback) {
-        String name = plugin.getConfig().getString(path, fallback);
+    /**
+     * Parses a sound string safe across legacy and modern engine installations.
+     */
+    private Sound parseSound(String path, String primaryFallback, String legacyFallback) {
+        String name = plugin.getConfig().getString(path, primaryFallback);
+        if (name == null || name.trim().isEmpty()) {
+            name = primaryFallback;
+        }
+
+        // 1. Attempt primary configuration lookup
         try {
-            return Sound.valueOf(name);
+            return Sound.valueOf(name.toUpperCase().trim());
         } catch (IllegalArgumentException e) {
-            plugin.getLogger().warning("[Sound] Unknown sound: " + name + " — using fallback.");
-            try { return Sound.valueOf(fallback); } catch (Exception ex) { return null; }
+            // 2. Configuration failed, attempt to validate primary fallback identifier
+            try {
+                return Sound.valueOf(primaryFallback);
+            } catch (IllegalArgumentException ex) {
+                // 3. Modern string missing on this instance profile, fall back to legacy string naming mappings
+                try {
+                    return Sound.valueOf(legacyFallback);
+                } catch (IllegalArgumentException finalEx) {
+                    plugin.getLogger().warning("[Sound] Could not find a matching sound enum for path: " 
+                            + path + " (Tried: " + name + ", " + primaryFallback + ", " + legacyFallback + ")");
+                    return null;
+                }
+            }
         }
     }
 

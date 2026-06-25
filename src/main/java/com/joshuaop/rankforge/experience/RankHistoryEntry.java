@@ -27,16 +27,22 @@ public record RankHistoryEntry(
      * The reason a rank changed.
      */
     public enum ChangeType {
-        /** Player earned a rank-up via requirements. */
-        RANKUP,
-        /** An admin directly set the player's rank. */
-        SET,
-        /** The rank was reset to the server default. */
-        RESET
+        RANKUP("Rankup"),
+        SET("Set"),
+        RESET("Reset");
+
+        private final String displayName;
+
+        ChangeType(String displayName) {
+            this.displayName = displayName;
+        }
+
+        public String getDisplayName() {
+            return displayName;
+        }
     }
 
-    /** 
-     * Human-readable formatted date-time string.
+    /** * Human-readable formatted date-time string.
      * Respects the server owner's configured timezone fallback.
      */
     public String getFormattedTime() {
@@ -47,29 +53,27 @@ public record RankHistoryEntry(
 
     /** Short display line for in-game history messages or GUI layouts. */
     public String toDisplayLine() {
-        // Clean title-casing: e.g., "RANKUP" -> "Rankup", "RESET" -> "Reset"
-        String typeName = type.name().charAt(0) + type.name().substring(1).toLowerCase();
-        
         return "§8[" + getFormattedTime() + "§8] §7"
-                + typeName + "§8: §e" + fromRankId + " §7→ §a" + toRankId;
+                + type.getDisplayName() + "§8: §e" + fromRankId + " §7→ §a" + toRankId;
     }
 
     /**
      * Helper to safely fetch the timezone specified in config.yml.
-     * Falls back to the machine's system default if unconfigured or invalid.
+     * Falls back to the machine's system default if unconfigured, invalid, 
+     * or called asynchronously during sensitive server states (e.g., shutdown).
      */
     private ZoneId getConfiguredZoneId() {
-        Plugin plugin = Bukkit.getPluginManager().getPlugin("RankForge");
-        if (plugin != null) {
-            // Read from config key, e.g., timezone: "Asia/Manila" or "America/New_York"
-            String zoneStr = plugin.getConfig().getString("timezone");
-            if (zoneStr != null && !zoneStr.trim().isEmpty()) {
-                try {
-                    return ZoneId.of(zoneStr);
-                } catch (Exception e) {
-                    // Invalid ID specified in config, silently drop to default
+        try {
+            Plugin plugin = Bukkit.getPluginManager().getPlugin("RankForge");
+            if (plugin != null) {
+                String zoneStr = plugin.getConfig().getString("timezone");
+                if (zoneStr != null && !zoneStr.trim().isEmpty()) {
+                    return ZoneId.of(zoneStr.trim());
                 }
             }
+        } catch (Exception e) {
+            // Catches any IllegalArgumentException from bad timezones 
+            // OR any thread access/null issues if accessed during server shutdown async tasks
         }
         return ZoneId.systemDefault();
     }

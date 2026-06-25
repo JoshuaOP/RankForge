@@ -10,6 +10,12 @@ import java.util.List;
 
 /**
  * Builds ItemStacks for rank entries and GUI decoration (glass panes).
+ *
+ * Status icon convention used across all rank GUIs:
+ *   ✔  — Completed / already unlocked
+ *   ⏳  — Current rank
+ *   ➤  — Next rank (reachable / in progress)
+ *   🔒  — Locked (future rank)
  */
 public final class RankItemBuilder {
 
@@ -29,18 +35,56 @@ public final class RankItemBuilder {
         ItemMeta  meta = item.getItemMeta();
         if (meta == null) return item;
 
-        String prefix = isCurrent ? "§a⟩ " : (isUnlocked ? "§e" : "§8");
-        meta.setDisplayName(prefix + rank.getDisplayName());
+        String statusPrefix;
+        if (isCurrent)       statusPrefix = "§a⏳ ";
+        else if (isUnlocked) statusPrefix = "§e✔ ";
+        else                 statusPrefix = "§8🔒 ";
+
+        meta.setDisplayName(statusPrefix + rank.getDisplayName());
 
         List<String> lore = new ArrayList<>(rank.getLore());
-        lore.add("");
-        if (isCurrent)       lore.add("§a✦ §lCurrent Rank");
-        else if (isUnlocked) lore.add("§a✔ Completed");
-        else                 lore.add("§c✘ Locked");
 
-        if (!rank.getNextRankId().isBlank()) lore.add("§7Next: §e" + rank.getNextRankId());
-        if (rank.getRequiredMoney()   > 0)   lore.add("§7Money: §a$" + (long) rank.getRequiredMoney());
-        if (rank.getRequiredXpLevel() > 0)   lore.add("§7XP Level: §a" + rank.getRequiredXpLevel());
+        lore.add("§8§m──────────────────────────");
+
+        if (isCurrent) {
+            lore.add("§a§l⏳ Current Rank");
+            lore.add("§7Open this GUI to view progress");
+            lore.add("§7toward the next rank.");
+        } else if (isUnlocked) {
+            lore.add("§a§l✔ Completed");
+            lore.add("§7You have already unlocked");
+            lore.add("§7this rank.");
+        } else {
+            lore.add("§c§l🔒 Locked");
+            lore.add("§7Complete earlier ranks first");
+            lore.add("§7to unlock this one.");
+        }
+
+        meta.setLore(lore);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    /**
+     * Build a rank item for the next-rank slot, showing that it is reachable.
+     * Player-specific requirement details are appended by AnimatedRankTreeGUI.
+     *
+     * @param rank       The target rank model
+     * @param canRankUp  True if all requirements are currently met
+     */
+    public static ItemStack buildNext(RankModel rank, boolean canRankUp) {
+        Material mat = parseMaterial(rank.getMaterial());
+        if (canRankUp) mat = Material.EMERALD_BLOCK;
+
+        ItemStack item = new ItemStack(mat);
+        ItemMeta  meta = item.getItemMeta();
+        if (meta == null) return item;
+
+        meta.setDisplayName("§e➤ " + rank.getDisplayName());
+
+        List<String> lore = new ArrayList<>(rank.getLore());
+        lore.add("§8§m──────────────────────────");
+        lore.add(canRankUp ? "§a§l✔ Requirements met!" : "§e§l➤ Next Rank (in progress)");
 
         meta.setLore(lore);
         item.setItemMeta(meta);

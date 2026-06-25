@@ -33,66 +33,62 @@ public class RankForgePlaceholders extends PlaceholderExpansion {
     @Override public boolean persist()               { return true; }
 
     @Override
-    public @Nullable String onRequest(OfflinePlayer offlinePlayer, @NotNull String params) {
+    public @Nullable String onRequest(OfflinePlayer op, @NotNull String params) {
         // System-level placeholders (no player context required)
         switch (params) {
             case "version"   -> { return plugin.getDescription().getVersion(); }
             case "gui_title" -> { return "§8✦ §6RankForge §8✦"; }
         }
 
-        if (offlinePlayer == null) return null;
+        if (op == null) return null;
 
         try {
-            return onPlaceholderRequest(offlinePlayer, params);
+            PlayerData data  = loadData(op);
+            String     curId = data != null ? data.rankId() : plugin.getRankManager().getDefaultRankId();
+            RankModel  cur   = plugin.getRankManager().getRank(curId);
+            RankModel  next  = plugin.getRankManager().getRank(plugin.getRankManager().getNextRankId(curId));
+
+            // Pull online player instance for dynamically calculated live metrics
+            Player p = op.getPlayer();
+
+            ProgressService svc      = plugin.getApi().getProgressService();
+            double          progress = p != null ? svc.getPercent(p) : 0.0;
+            double          balance  = safeBalance(op);
+            double          nextCost = next != null ? next.getRequiredMoney() : 0;
+
+            return switch (params) {
+                case "rank"                 -> curId;
+                case "rank_name", "rank_display" -> cur != null ? cur.getDisplayName() : curId;
+                case "rank_prefix"          -> cur  != null ? cur.getChatPrefix()   : "";
+                case "rank_position"        -> String.valueOf(getRankPosition(curId));
+                case "is_max_rank"          -> String.valueOf(next == null);
+                case "next_rank"            -> next != null ? next.getId()          : "MAX";
+                case "next_cost"            -> next != null ? String.format("$%,.0f", next.getRequiredMoney()) : "MAX";
+                case "cost"                 -> cur  != null ? String.format("$%,.0f", cur.getRequiredMoney())  : "0";
+                case "progress"             -> String.format("%.1f", progress);
+                case "progress_percent"     -> String.format("%.1f", progress) + "%";
+                case "progress_bar"         -> p != null ? svc.getProgressBar(p) : "----------";
+                case "required_progress"    -> next != null ? formatReq(next)      : "§6MAX";
+                case "remaining_progress"   -> calculateRemainingProgress(op, next, balance);
+                case "money"                -> String.format("$%,.0f", balance);
+                case "has_money"            -> String.valueOf(nextCost == 0 || balance >= nextCost);
+                case "missing_money"        -> next != null ? String.format("$%,.0f", Math.max(0, next.getRequiredMoney() - balance)) : "0";
+                case "requirements_status"  -> p != null ? requirementStatus(p, next) : "§7Offline";
+                case "requirements_detail"  -> p != null ? requirementDetail(p, next) : "§7Offline";
+                case "xp_level"             -> p != null ? String.valueOf(p.getLevel()) : "0";
+                case "xp_progress"          -> p != null ? (p.getExp() >= 0.99f ? "99.9%" : String.format("%.1f", p.getExp() * 100f) + "%") : "0.0%";
+                case "player"               -> op.getName() != null ? op.getName() : "Unknown";
+                case "uuid"                 -> op.getUniqueId().toString();
+                case "lang"                 -> plugin.getLangManager().getPlayerLang(op.getUniqueId());
+                default                     -> null;
+            };
         } catch (Exception e) {
             if (plugin.isDebug()) {
                 plugin.getLogger().warning("[Placeholders] Exception for placeholder '"
-                        + params + "' on " + offlinePlayer.getName() + ": " + e.getMessage());
+                        + params + "' on " + op.getName() + ": " + e.getMessage());
             }
             return "";
         }
-    }
-
-    private String onPlaceholderRequest(OfflinePlayer op, String params) {
-        PlayerData data  = loadData(op);
-        String     curId = data != null ? data.rankId() : plugin.getRankManager().getDefaultRankId();
-        RankModel  cur   = plugin.getRankManager().getRank(curId);
-        RankModel  next  = plugin.getRankManager().getRank(plugin.getRankManager().getNextRankId(curId));
-
-        // Pull online player instance for dynamically calculated live metrics
-        Player p = op.getPlayer();
-
-        ProgressService svc      = plugin.getApi().getProgressService();
-        double          progress = p != null ? svc.getPercent(p) : 0.0;
-        double          balance  = safeBalance(op);
-        double          nextCost = next != null ? next.getRequiredMoney() : 0;
-
-        return switch (params) {
-            case "rank"                 -> curId;
-            case "rank_name", "rank_display" -> cur != null ? cur.getDisplayName() : curId;
-            case "rank_prefix"          -> cur  != null ? cur.getChatPrefix()   : "";
-            case "rank_position"        -> String.valueOf(getRankPosition(curId));
-            case "is_max_rank"          -> String.valueOf(next == null);
-            case "next_rank"            -> next != null ? next.getId()          : "MAX";
-            case "next_cost"            -> next != null ? String.format("$%,.0f", next.getRequiredMoney()) : "MAX";
-            case "cost"                 -> cur  != null ? String.format("$%,.0f", cur.getRequiredMoney())  : "0";
-            case "progress"             -> String.format("%.1f", progress);
-            case "progress_percent"     -> String.format("%.1f", progress) + "%";
-            case "progress_bar"         -> p != null ? svc.getProgressBar(p) : "----------";
-            case "required_progress"    -> next != null ? formatReq(next)      : "§6MAX";
-            case "remaining_progress"   -> p != null ? remaining(p, next, balance) : "---";
-            case "money"                -> String.format("$%,.0f", balance);
-            case "has_money"            -> String.valueOf(nextCost == 0 || balance >= nextCost);
-            case "missing_money"        -> next != null ? String.format("$%,.0f", Math.max(0, next.getRequiredMoney() - balance)) : "0";
-            case "requirements_status"  -> p != null ? requirementStatus(p, next) : "§7Offline";
-            case "requirements_detail"  -> p != null ? requirementDetail(p, next) : "§7Offline";
-            case "xp_level"             -> p != null ? String.valueOf(p.getLevel()) : "0";
-            case "xp_progress"          -> p != null ? (p.getExp() >= 0.99f ? "99.9%" : String.format("%.1f", p.getExp() * 100f) + "%") : "0.0%";
-            case "player"               -> op.getName() != null ? op.getName() : "Unknown";
-            case "uuid"                 -> op.getUniqueId().toString();
-            case "lang"                 -> plugin.getLangManager().getPlayerLang(op.getUniqueId());
-            default                     -> null;
-        };
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -100,7 +96,6 @@ public class RankForgePlaceholders extends PlaceholderExpansion {
     private PlayerData loadData(OfflinePlayer op) {
         try {
             var cache = plugin.getRankManager().getCacheManager();
-            // Read execution context directly from memory allocation mapping
             if (cache.contains(op.getUniqueId())) {
                 PlayerData data = cache.get(op.getUniqueId());
                 if (plugin.getRankManager().getRank(data.rankId()) == null) {
@@ -108,7 +103,6 @@ public class RankForgePlaceholders extends PlaceholderExpansion {
                 }
                 return data;
             }
-            // Return temporary runtime context on local misses to insulate main thread loops
             return PlayerData.defaultData(op.getUniqueId(), op.getName(), plugin.getRankManager().getDefaultRankId());
         } catch (Exception e) {
             return null;
@@ -117,9 +111,10 @@ public class RankForgePlaceholders extends PlaceholderExpansion {
 
     private double safeBalance(OfflinePlayer op) {
         try {
-            if (plugin.getSoftDependency() != null && plugin.getSoftDependency().hasVault()) {
-                return plugin.getSoftDependency().getBalance(op);
-            }
+            if (plugin.getSoftDependency() == null || !plugin.getSoftDependency().hasVault()) return 0.0;
+            Player online = op.getPlayer();
+            if (online != null) return plugin.getSoftDependency().getBalance(online);
+            return plugin.getSoftDependency().getVaultEconomy().getBalance(op);
         } catch (Exception ignored) {}
         return 0.0;
     }
@@ -144,17 +139,23 @@ public class RankForgePlaceholders extends PlaceholderExpansion {
         return result.isEmpty() ? "§7None" : result;
     }
 
-    private String remaining(Player p, RankModel next, double balance) {
+    private String calculateRemainingProgress(OfflinePlayer op, RankModel next, double balance) {
         if (next == null) return "§6MAX";
         StringBuilder sb = new StringBuilder();
 
         double moneyLeft = next.getRequiredMoney() - balance;
-        int    xpLeft    = next.getRequiredXpLevel() - p.getLevel();
         if (moneyLeft > 0) sb.append("$").append(String.format("%,.0f", moneyLeft)).append(" ");
-        if (xpLeft    > 0) sb.append("Lv").append(xpLeft);
+
+        Player p = op.getPlayer();
+        if (p != null) {
+            int xpLeft = next.getRequiredXpLevel() - p.getLevel();
+            if (xpLeft > 0) sb.append("Lv").append(xpLeft);
+        } else if (next.getRequiredXpLevel() > 0) {
+            sb.append("Lv").append(next.getRequiredXpLevel());
+        }
 
         if (plugin.getBlockBreakTracker() != null && next.getRequiredBlockBreaks() > 0) {
-            long haveBlocks = plugin.getBlockBreakTracker().getCount(p.getUniqueId());
+            long haveBlocks = plugin.getBlockBreakTracker().getCount(op.getUniqueId());
             long leftBlocks = next.getRequiredBlockBreaks() - haveBlocks;
             if (leftBlocks > 0) sb.append(" ").append(String.format("%,d", leftBlocks)).append(" blocks");
         }

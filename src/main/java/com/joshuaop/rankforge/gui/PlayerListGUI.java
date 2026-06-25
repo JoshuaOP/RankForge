@@ -260,6 +260,15 @@ public class PlayerListGUI {
         return item;
     }
 
+    /**
+     * Called from GUIListener.onInventoryClose to clean up page state
+     * when the player closes the GUI via the Escape key or other means
+     * rather than the Close button.
+     */
+    public static void closeFor(UUID uuid) {
+        if (uuid != null) PAGE_MAP.remove(uuid);
+    }
+
     /** Invalidate the OfflinePlayer reference cache for a specific UUID. */
     public static void invalidateHeadCache(UUID uuid) {
         if (uuid != null) OFFLINE_CACHE.remove(uuid);

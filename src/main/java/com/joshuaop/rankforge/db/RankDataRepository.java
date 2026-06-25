@@ -123,8 +123,9 @@ public class RankDataRepository {
     }
 
     private PlayerData makeDefault(UUID uuid, String playerName) {
-        String defaultRankId = plugin.getConfig().getString("ranks.default-rank",
-                plugin.getRankManager() != null ? plugin.getRankManager().getDefaultRankId() : "Guest");
+        String defaultRankId = plugin.getRankManager() != null
+                ? plugin.getRankManager().getDefaultRankId()
+                : "Guest";
         PlayerData data = PlayerData.defaultData(uuid, playerName, defaultRankId);
         cache.put(uuid, data);
         return data;

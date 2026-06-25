@@ -103,7 +103,8 @@ public class YamlPlayerDataStorage {
     public PlayerData loadPlayer(UUID uuid, String playerName) {
         String path = "players." + uuid;
         if (!yaml.contains(path)) {
-            String defaultRank = plugin.getConfig().getString("ranks.default-rank", "Guest");
+            String defaultRank = plugin.getRankManager() != null
+                    ? plugin.getRankManager().getDefaultRankId() : "Guest";
             PlayerData def = PlayerData.defaultData(uuid, playerName, defaultRank);
             savePlayer(def);
             return def;
@@ -171,10 +172,12 @@ public class YamlPlayerDataStorage {
     }
 
     private PlayerData fromSection(UUID uuid, ConfigurationSection s) {
+        String defaultRank = plugin.getRankManager() != null
+                ? plugin.getRankManager().getDefaultRankId() : "Guest";
         return new PlayerData(
                 uuid,
-                s.getString("name",         "Unknown"),
-                s.getString("rank",         plugin.getConfig().getString("ranks.default-rank", "Guest")),
+                s.getString("name",  "Unknown"),
+                s.getString("rank",  defaultRank),
                 s.getLong("experience",     0L),
                 s.getDouble("money",        0.0),
                 s.getString("language",     "en"),
