@@ -16,7 +16,7 @@ messages:
   rank_force_success: "%prefix% §aForced §e%player% §ato rank §e%rank%§a!"
 
   # Progress
-  progress_bar: "%prefix% §7Progress: §a%bar% §7(§e%percent%§7%%)"
+  progress_bar: "%prefix% §7Progress: §a%bar% §7(§e%percent%§7%)"
   current_rank: "%prefix% §7Your current rank: §e%rank%"
   next_rank: "%prefix% §7Next rank: §e%rank%"
   no_next_rank: "%prefix% §6You are at the maximum rank!"
@@ -71,4 +71,4 @@ messages:
   xp_header: "%prefix% §7=== Vanilla XP Info ==="
   xp_level: "  §7Level:    §a%level%"
   xp_total: "  §7Total XP: §a%xp%"
-  xp_progress: "  §7Progress: %bar% §e%percent%§7%%"
+  xp_progress: "  §7Progress: %bar% §e%percent%§7%"

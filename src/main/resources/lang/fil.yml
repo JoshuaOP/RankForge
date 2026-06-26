@@ -1,11 +1,13 @@
 prefix: "§6RankForge §8»"
 
 messages:
+  # General
   no_permission: "%prefix% §cWala kang pahintulot!"
   player_only: "%prefix% §cPara lamang sa mga manlalaro!"
   player_not_found: "%prefix% §cHindi nahanap ang manlalaro na §e%player%§c!"
   reload_success: "%prefix% §aMatagumpay na na-reload ang plugin!"
 
+  # Rank
   rankup_success: "%prefix% §aNag-rank up ka sa §e%rank%§a!"
   rankup_fail: "%prefix% §cHindi mo natutugunan ang mga kinakailangan!"
   rankup_max: "%prefix% §eNasa pinakamataas ka nang rank!"
@@ -13,37 +15,60 @@ messages:
   rank_reset_success: "%prefix% §aNa-reset na ang rank ni §e%player%§a!"
   rank_force_success: "%prefix% §aPilit na na-rank up si §e%player% §asa §e%rank%§a!"
 
-  progress_bar: "%prefix% §7Progreso: §a%bar% §7(§e%percent%§7%%)"
+  # Progress
+  progress_bar: "%prefix% §7Progreso: §a%bar% §7(§e%percent%§7%)"
   current_rank: "%prefix% §7Kasalukuyang rank: §e%rank%"
   next_rank: "%prefix% §7Susunod na rank: §e%rank%"
   no_next_rank: "%prefix% §6Nasa pinakamataas ka nang rank!"
 
+  # Requirements
   requirements_header: "%prefix% §7Mga kinakailangan para sa §e%rank%§7:"
   requirement_met: "  §a✔ §7%type%: §a%value% §8(natutugunan)"
   requirement_unmet: "  §c✘ §7%type%: §c%value% §8(hindi pa natutugunan)"
 
+  # GUI
   gui_click_fast: "%prefix% §cNag-click ka nang masyadong mabilis!"
   gui_title: "§8✦ §6RankForge §8✦"
   gui_admin_title: "§8✦ §cAdmin Rank Editor §8✦"
+  gui_drag_title: "§8✦ §bSlot Editor §8✦"
 
+  # Language
   lang_set: "%prefix% §aNa-set na ang wika sa §e%lang%§a!"
   lang_unknown: "%prefix% §cHindi kilala ang wika: §e%lang%"
   lang_reset: "%prefix% §aNa-reset na ang wika sa default."
   lang_list: "%prefix% §7Mga available na wika: §e%list%"
 
-  announce_rankup: "§6✦ §eNag-rank up si §a%player% §asa §6%rank% §a✦"
+  # Announcements
+  announce_rankup: "§6✦ §e%player% §anay nag-rank up sa §6%rank% §a✦"
 
+  # Version
   version_info: "%prefix% §7Bersyon ng plugin: §a%version%"
   version_mc_current: "%prefix% §7Tumatakbo sa §a%mc_version%"
   version_mc_supported: "%prefix% §aAng iyong bersyon ng server ay sinusuportahan!"
   version_mc_unsupported: "%prefix% §eAng iyong bersyon ng server ay HINDI opisyal na sinusuportahan!"
 
+  # Editor
+  editor_saved: "%prefix% §aMatagumpay na naisave ang mga rank sa ranks.yml!"
+  editor_reload: "%prefix% §aRanks hot-reloaded mula sa ranks.yml!"
+  editor_rank_moved: "%prefix% §aAng rank na §e%rank% §aay inilipat sa slot §e%slot%§a."
+
+  # Security
   security_status: "%prefix% §7Anti-bypass: §a%bypass% §7| GUI Shield: §a%shield%"
+
+  # Stats
   stats_header: "%prefix% §7=== Istatistika ng Sistema ==="
   stats_players: "  §7Mga Naka-cache na Manlalaro: §e%count%"
   stats_ranks: "  §7Mga Na-load na Rank: §e%count%"
+
+  # Debug
   debug_info: "%prefix% §7[DEBUG] Rank: §e%rank% §7| DB: §a%db% §7| Wika: §e%lang%"
+
+  # Sounds
   sound_test: "%prefix% §aNa-play ang test na tunog!"
   sound_reload: "%prefix% §aNa-reload ang mga tunog!"
-  top_header: "%prefix% §7=== Pinaka-ranked na Manlalaro ==="
-  top_entry: "  §e#%pos% §a%player% §8- §7%rank%"
+
+  # XP
+  xp_header: "%prefix% §7=== Impormasyon ng Vanilla XP ==="
+  xp_level: "  §7Level:      §a%level%"
+  xp_total: "  §7Kabuuhang XP: §a%xp%"
+  xp_progress: "  §7Progreso:   %bar% §e%percent%§7%"

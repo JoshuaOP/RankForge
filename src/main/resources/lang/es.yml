@@ -1,11 +1,13 @@
 prefix: "§6RankForge §8»"
 
 messages:
+  # General
   no_permission: "%prefix% §c¡No tienes permiso!"
   player_only: "%prefix% §c¡Este comando es solo para jugadores!"
   player_not_found: "%prefix% §c¡Jugador §e%player% §cno encontrado!"
   reload_success: "%prefix% §a¡Plugin recargado exitosamente!"
 
+  # Rank
   rankup_success: "%prefix% §a¡Subiste al rango §e%rank%§a!"
   rankup_fail: "%prefix% §c¡No cumples los requisitos!"
   rankup_max: "%prefix% §e¡Ya estás en el rango máximo!"
@@ -13,37 +15,60 @@ messages:
   rank_reset_success: "%prefix% §a¡Rango de §e%player% §areiniciado!"
   rank_force_success: "%prefix% §a¡Rango de §e%player% §aforzado a §e%rank%§a!"
 
-  progress_bar: "%prefix% §7Progreso: §a%bar% §7(§e%percent%§7%%)"
+  # Progress
+  progress_bar: "%prefix% §7Progreso: §a%bar% §7(§e%percent%§7%)"
   current_rank: "%prefix% §7Tu rango actual: §e%rank%"
   next_rank: "%prefix% §7Siguiente rango: §e%rank%"
   no_next_rank: "%prefix% §6¡Ya estás en el rango máximo!"
 
+  # Requirements
   requirements_header: "%prefix% §7Requisitos para §e%rank%§7:"
   requirement_met: "  §a✔ §7%type%: §a%value% §8(cumplido)"
   requirement_unmet: "  §c✘ §7%type%: §c%value% §8(no cumplido)"
 
+  # GUI
   gui_click_fast: "%prefix% §c¡Estás haciendo clic demasiado rápido!"
   gui_title: "§8✦ §6RankForge §8✦"
   gui_admin_title: "§8✦ §cEditor Admin §8✦"
+  gui_drag_title: "§8✦ §bEditor de Slots §8✦"
 
+  # Language
   lang_set: "%prefix% §a¡Idioma establecido a §e%lang%§a!"
   lang_unknown: "%prefix% §cIdioma desconocido: §e%lang%"
-  lang_reset: "%prefix% §aIdioma reiniciado al predeterminado."
+  lang_reset: "%prefix% §aIdioma原始 reiniciado al predeterminado."
   lang_list: "%prefix% §7Idiomas disponibles: §e%list%"
 
+  # Announcements
   announce_rankup: "§6✦ §e%player% §asubió al rango §6%rank% §a✦"
 
+  # Version
   version_info: "%prefix% §7Versión del plugin: §a%version%"
   version_mc_current: "%prefix% §7Ejecutando en §a%mc_version%"
   version_mc_supported: "%prefix% §a¡Tu versión del servidor es compatible!"
   version_mc_unsupported: "%prefix% §e¡Tu versión del servidor NO está soportada oficialmente!"
 
+  # Editor
+  editor_saved: "%prefix% §a¡Rangos guardados en ranks.yml con éxito!"
+  editor_reload: "%prefix% §a¡Rangos recargados desde ranks.yml!"
+  editor_rank_moved: "%prefix% §aRango §e%rank% §amovido al slot §e%slot%§a."
+
+  # Security
   security_status: "%prefix% §7Anti-bypass: §a%bypass% §7| GUI Shield: §a%shield%"
+
+  # Stats
   stats_header: "%prefix% §7=== Estadísticas del Sistema ==="
   stats_players: "  §7Jugadores en Caché: §e%count%"
   stats_ranks: "  §7Rangos Cargados: §e%count%"
+
+  # Debug
   debug_info: "%prefix% §7[DEBUG] Rango: §e%rank% §7| DB: §a%db% §7| Idioma: §e%lang%"
+
+  # Sounds
   sound_test: "%prefix% §a¡Sonido de prueba reproducido!"
   sound_reload: "%prefix% §a¡Sonidos recargados!"
-  top_header: "%prefix% §7=== Mejores Jugadores Rankeados ==="
-  top_entry: "  §e#%pos% §a%player% §8- §7%rank%"
+
+  # XP
+  xp_header: "%prefix% §7=== Información de XP Vainilla ==="
+  xp_level: "  §7Nivel:     §a%level%"
+  xp_total: "  §7Total XP:  §a%xp%"
+  xp_progress: "  §7Progreso:  %bar% §e%percent%§7%"
