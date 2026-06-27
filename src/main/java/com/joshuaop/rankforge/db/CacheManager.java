@@ -157,7 +157,7 @@ public class CacheManager {
         // ── Live Vault balance ────────────────────────────────────────────────
         double liveMoney = data.money();
         if (plugin.getSoftDependency() != null && plugin.getSoftDependency().hasVault()) {
-            try { liveMoney = plugin.getSoftDependency().getVaultEconomy().getBalance(player); }
+            try { liveMoney = plugin.getSoftDependency().getBalance(player); }
             catch (Exception ignored) {}
         }
 

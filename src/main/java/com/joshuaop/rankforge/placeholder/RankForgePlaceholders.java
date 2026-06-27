@@ -114,7 +114,7 @@ public class RankForgePlaceholders extends PlaceholderExpansion {
             if (plugin.getSoftDependency() == null || !plugin.getSoftDependency().hasVault()) return 0.0;
             Player online = op.getPlayer();
             if (online != null) return plugin.getSoftDependency().getBalance(online);
-            return plugin.getSoftDependency().getVaultEconomy().getBalance(op);
+            return plugin.getSoftDependency().getBalance(op);
         } catch (Exception ignored) {}
         return 0.0;
     }

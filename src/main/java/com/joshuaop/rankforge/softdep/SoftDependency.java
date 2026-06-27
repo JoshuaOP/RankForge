@@ -4,9 +4,6 @@ import com.joshuaop.rankforge.RankForge;
 import com.joshuaop.rankforge.db.CacheManager;
 import com.joshuaop.rankforge.db.PlayerData;
 import com.joshuaop.rankforge.rank.RankModel;
-import net.luckperms.api.LuckPerms;
-import net.milkbowl.vault.economy.Economy;
-import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -14,22 +11,27 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.plugin.RegisteredServiceProvider;
 
 import java.util.UUID;
 
 /**
  * Unified soft-dependency handler and player event listener.
- * Manages Vault, LuckPerms, and PlaceholderAPI hooks.
+ *
+ * <p>All optional API classes (LuckPerms, Vault Economy, PlaceholderAPI, Floodgate)
+ * are intentionally NOT imported at the class level.  Each dependency is isolated
+ * inside its own adapter ({@link LuckPermsHook}, {@link VaultAdapter}) which the JVM
+ * only loads after we confirm the corresponding plugin is installed.  This prevents
+ * {@code NoClassDefFoundError} / {@code ClassNotFoundException} when optional plugins
+ * are absent.</p>
  */
 public class SoftDependency implements Listener {
 
     private final RankForge plugin;
 
-    private Economy       vaultEconomy;
-    private LuckPermsHook luckPermsHook;
-    private boolean       papiEnabled;
-    private boolean       floodgateEnabled;
+    private VaultAdapter   vaultAdapter;
+    private LuckPermsHook  luckPermsHook;
+    private boolean        papiEnabled;
+    private boolean        floodgateEnabled;
 
     public SoftDependency(RankForge plugin) {
         this.plugin = plugin;
@@ -40,11 +42,6 @@ public class SoftDependency implements Listener {
         setupLuckPerms();
         checkPapi();
         checkFloodgate();
-
-        plugin.getLogger().info("[SoftDep] Vault=" + (vaultEconomy != null ? "✓" : "✗")
-                + "  LuckPerms=" + (luckPermsHook != null ? "✓" : "✗")
-                + "  PlaceholderAPI=" + (papiEnabled ? "✓" : "✗")
-                + "  Floodgate=" + (floodgateEnabled ? "✓" : "✗"));
     }
 
     // ── Player Events ─────────────────────────────────────────────────────────
@@ -61,7 +58,6 @@ public class SoftDependency implements Listener {
             plugin.getRankManager().getCacheManager().put(uuid, data);
         }
 
-        // Validate the player's stored rank still exists; repair to default if not.
         if (plugin.getRankManager().getRank(data.rankId()) == null) {
             String fallback = plugin.getRankManager().getDefaultRankId();
             data = data.withRank(fallback);
@@ -85,10 +81,9 @@ public class SoftDependency implements Listener {
         if (cache.contains(uuid)) {
             PlayerData data = cache.get(uuid);
 
-            // Stitch live Vault balance before persisting so the saved value stays current.
-            if (data != null && vaultEconomy != null) {
+            if (data != null && vaultAdapter != null) {
                 try {
-                    double liveBalance = vaultEconomy.getBalance(player);
+                    double liveBalance = vaultAdapter.getBalance(player);
                     data = data.withMoney(liveBalance);
                     cache.put(uuid, data);
                 } catch (Exception ignored) {}
@@ -105,51 +100,63 @@ public class SoftDependency implements Listener {
     // ── Vault ─────────────────────────────────────────────────────────────────
 
     private void setupVault() {
-        if (plugin.getServer().getPluginManager().getPlugin("Vault") == null) return;
-        RegisteredServiceProvider<Economy> rsp =
-                plugin.getServer().getServicesManager().getRegistration(Economy.class);
-        if (rsp != null) vaultEconomy = rsp.getProvider();
+        if (plugin.getServer().getPluginManager().getPlugin("Vault") == null) {
+            plugin.getLogger().info("[RankForge] Vault not found. Economy features disabled.");
+            return;
+        }
+        try {
+            vaultAdapter = VaultAdapter.create(plugin);
+            if (vaultAdapter != null) {
+                plugin.getLogger().info("[RankForge] \u2713 Vault integration enabled.");
+            } else {
+                plugin.getLogger().warning("[RankForge] Vault found but no Economy provider is registered.");
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning("[RankForge] Vault hook failed: " + e.getMessage());
+        }
     }
 
     public double getBalance(Player player) {
-        if (vaultEconomy == null) return 0;
-        try { return vaultEconomy.getBalance(player); }
-        catch (Exception e) { return 0; }
+        if (vaultAdapter == null) return 0;
+        return vaultAdapter.getBalance(player);
+    }
+
+    public double getBalance(OfflinePlayer player) {
+        if (vaultAdapter == null) return 0;
+        return vaultAdapter.getBalance(player);
     }
 
     public boolean withdraw(Player player, double amount) {
-        if (vaultEconomy == null) return false;
-        try {
-            return vaultEconomy.has(player, amount)
-                    && vaultEconomy.withdrawPlayer(player, amount).transactionSuccess();
-        } catch (Exception e) { return false; }
+        if (vaultAdapter == null) return false;
+        return vaultAdapter.withdraw(player, amount);
     }
 
     /**
      * Set an offline/online player's Vault balance to an exact amount.
-     * Since Vault has no direct "set balance" API, this calculates the delta and
-     * deposits or withdraws accordingly.
      */
     public void setBalance(OfflinePlayer player, double targetAmount) {
-        if (vaultEconomy == null) return;
-        try {
-            double current = vaultEconomy.getBalance(player);
-            double diff    = targetAmount - current;
-            if (diff > 0)      vaultEconomy.depositPlayer(player, diff);
-            else if (diff < 0) vaultEconomy.withdrawPlayer(player, -diff);
-        } catch (Exception ignored) {}
+        if (vaultAdapter == null) return;
+        vaultAdapter.setBalance(player, targetAmount);
     }
 
     // ── LuckPerms ─────────────────────────────────────────────────────────────
 
     private void setupLuckPerms() {
-        if (plugin.getServer().getPluginManager().getPlugin("LuckPerms") == null) return;
+        if (plugin.getServer().getPluginManager().getPlugin("LuckPerms") == null) {
+            plugin.getLogger().info("[RankForge] LuckPerms not found. Permission integration disabled.");
+            return;
+        }
         try {
-            RegisteredServiceProvider<LuckPerms> rsp =
-                    plugin.getServer().getServicesManager().getRegistration(LuckPerms.class);
-            if (rsp != null) luckPermsHook = new LuckPermsHook(rsp.getProvider());
+            luckPermsHook = LuckPermsHook.create(plugin);
+            if (luckPermsHook != null) {
+                plugin.getLogger().info("[RankForge] \u2713 LuckPerms integration enabled.");
+            } else {
+                plugin.getLogger().warning("[RankForge] LuckPerms found but service provider is unavailable.");
+            }
         } catch (Exception e) {
-            plugin.getLogger().warning("[SoftDep] LuckPerms hook failed: " + e.getMessage());
+            if (plugin.isDebug()) {
+                plugin.getLogger().info("[SoftDep-Debug] LuckPerms hook failed: " + e.getMessage());
+            }
         }
     }
 
@@ -177,6 +184,11 @@ public class SoftDependency implements Listener {
 
     private void checkPapi() {
         papiEnabled = plugin.getServer().getPluginManager().getPlugin("PlaceholderAPI") != null;
+        if (papiEnabled) {
+            plugin.getLogger().info("[RankForge] \u2713 PlaceholderAPI integration enabled.");
+        } else {
+            plugin.getLogger().info("[RankForge] PlaceholderAPI not found. Placeholder support disabled.");
+        }
     }
 
     // ── Floodgate / Geyser Crossplay ──────────────────────────────────────────
@@ -184,18 +196,15 @@ public class SoftDependency implements Listener {
     private void checkFloodgate() {
         floodgateEnabled = plugin.getServer().getPluginManager().getPlugin("floodgate") != null
                 || plugin.getServer().getPluginManager().getPlugin("Floodgate") != null;
+        if (floodgateEnabled) {
+            plugin.getLogger().info("[RankForge] \u2713 Floodgate integration enabled.");
+        } else {
+            plugin.getLogger().info("[RankForge] Floodgate not found. Bedrock support disabled.");
+        }
     }
 
     /**
      * Returns {@code true} if the player is connecting via Geyser/Floodgate (Bedrock Edition).
-     *
-     * <p>Detection strategy:
-     * <ol>
-     *   <li>Check if the Floodgate plugin is present and the player name starts with the
-     *       configured Bedrock prefix (default {@code "."}).</li>
-     *   <li>Fall back to checking the plain username prefix alone if Floodgate isn't loaded,
-     *       so that crossplay-safe branches still degrade gracefully on Java-only servers.</li>
-     * </ol>
      */
     public boolean isBedrockPlayer(Player player) {
         if (player == null) return false;
@@ -215,10 +224,8 @@ public class SoftDependency implements Listener {
 
     // ── Accessors ─────────────────────────────────────────────────────────────
 
-    public boolean   hasVault()           { return vaultEconomy != null; }
-    public boolean   hasLuckPerms()       { return luckPermsHook != null; }
-    public boolean   hasPapi()            { return papiEnabled; }
-    public boolean   hasFloodgate()       { return floodgateEnabled; }
-    public LuckPerms getLuckPerms()       { return luckPermsHook != null ? luckPermsHook.getApi() : null; }
-    public Economy   getVaultEconomy()    { return vaultEconomy; }
+    public boolean hasVault()       { return vaultAdapter != null; }
+    public boolean hasLuckPerms()   { return luckPermsHook != null; }
+    public boolean hasPapi()        { return papiEnabled; }
+    public boolean hasFloodgate()   { return floodgateEnabled; }
 }
