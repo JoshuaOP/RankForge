@@ -21,6 +21,7 @@ import com.joshuaop.rankforge.manager.AntiBypassManager;
 import com.joshuaop.rankforge.manager.GuiClickShieldManager;
 import com.joshuaop.rankforge.manager.RequirementManager;
 import com.joshuaop.rankforge.manager.SoundManager;
+import com.joshuaop.rankforge.manager.UpdateChecker;
 import com.joshuaop.rankforge.performance.PerformanceManager;
 import com.joshuaop.rankforge.performance.TaskScheduler;
 import com.joshuaop.rankforge.permission.PermissionNodeGenerator;
@@ -83,6 +84,9 @@ public final class RankForge extends JavaPlugin {
     private HookRegistry              hookRegistry;
     private ExternalGUIRegistry       externalGUIRegistry;
     private RestAPIServer             restAPIServer;
+
+    // ── Update Checker ────────────────────────────────────────────────────────
+    private UpdateChecker             updateChecker;
 
     @Override
     public void onEnable() {
@@ -259,6 +263,9 @@ public final class RankForge extends JavaPlugin {
         startRepeatingTasks();
 
         if (restAPIServer != null) restAPIServer.start();
+
+        updateChecker = new UpdateChecker(this);
+        updateChecker.checkOnStartup();
     }
 
     // REVISION: Abstracted repeating background registrations to simplify logic reuse inside reloads
@@ -309,6 +316,7 @@ public final class RankForge extends JavaPlugin {
 
         if (soundManager != null) soundManager.reload();
         if (antiBypassManager != null) antiBypassManager.reload();
+        if (updateChecker != null) updateChecker.reload();
         if (expansionRegistry != null) expansionRegistry.reloadAll();
         if (guiConfig != null) guiConfig.load();
         
@@ -369,4 +377,5 @@ public final class RankForge extends JavaPlugin {
     public HookRegistry                  getHookRegistry()                 { return hookRegistry; }
     public ExternalGUIRegistry           getExternalGUIRegistry()          { return externalGUIRegistry; }
     public RestAPIServer                 getRestAPIServer()                 { return restAPIServer; }
+    public UpdateChecker                 getUpdateChecker()                 { return updateChecker; }
 }

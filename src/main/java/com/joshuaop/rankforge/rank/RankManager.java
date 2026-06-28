@@ -73,17 +73,17 @@ public class RankManager {
         return defaultRankId; 
     }
 
-    // REVISION: Switched from List.copyOf (high allocations) to an unmodifiable collection view
+    // REVISION: Returns an isolated snapshot array list to avoid ConcurrentModificationExceptions asynchronously
     public Collection<RankModel> getModelList() {
         synchronized (lock) {
-            return Collections.unmodifiableCollection(ranks.values());
+            return new ArrayList<>(ranks.values());
         }
     }
 
-    // REVISION: Switched from Set.copyOf to an unmodifiable set view for constant-time lookups
+    // REVISION: Returns an isolated snapshot hash set to avoid ConcurrentModificationExceptions asynchronously
     public Set<String> getRankIds() {
         synchronized (lock) {
-            return Collections.unmodifiableSet(ranks.keySet());
+            return new HashSet<>(ranks.keySet());
         }
     }
 
@@ -142,6 +142,9 @@ public class RankManager {
         if (getRank(fallback) == null) {
             synchronized (lock) {
                 fallback = ranks.isEmpty() ? null : ranks.keySet().iterator().next();
+                if (fallback != null) {
+                    this.defaultRankId = fallback; // REVISION: Permanently heal misconfigured layouts
+                }
             }
         }
         if (fallback == null) return;
