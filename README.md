@@ -170,7 +170,7 @@ None. RankForge works out of the box with zero required dependencies.
 
 ## 🚀 Installation
 
-1. **Download** `RankForge-2.7.jar` from the [Releases page](https://github.com/JoshuaOP/RankForge/releases/latest).
+1. **Download** `RankForge-2.7.jar` from the [Spigot page](https://www.spigotmc.org/resources/%E2%9C%A6-rankforge-%E2%9A%A1.134929/).
 
 2. **Drop the JAR** into your `plugins/` directory:
    ```
