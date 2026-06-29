@@ -6,7 +6,7 @@
 
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.17--1.21.4-brightgreen?style=for-the-badge&logo=minecraft)](https://www.minecraft.net/)
 [![Java](https://img.shields.io/badge/Java-21%2B-orange?style=for-the-badge&logo=openjdk)](https://adoptium.net/)
-[![Version](https://img.shields.io/badge/Version-2.6-purple?style=for-the-badge)](https://github.com/JoshuaOP/RankForge/releases)
+[![Version](https://img.shields.io/badge/Version-2.7-purple?style=for-the-badge)](https://github.com/JoshuaOP/RankForge/releases)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 [![bStats](https://img.shields.io/badge/bStats-31704-informational?style=for-the-badge)](https://bstats.org/plugin/bukkit/RankForge/31704)
 [![Issues](https://img.shields.io/github/issues/JoshuaOP/RankForge?style=for-the-badge)](https://github.com/JoshuaOP/RankForge/issues)
@@ -170,13 +170,13 @@ None. RankForge works out of the box with zero required dependencies.
 
 ## 🚀 Installation
 
-1. **Download** `RankForge-2.6.jar` from the [Releases page](https://github.com/JoshuaOP/RankForge/releases/latest).
+1. **Download** `RankForge-2.7.jar` from the [Releases page](https://github.com/JoshuaOP/RankForge/releases/latest).
 
 2. **Drop the JAR** into your `plugins/` directory:
    ```
    server/
    └── plugins/
-       └── RankForge-2.6.jar
+       └── RankForge-2.7.jar
    ```
 
 3. **(Optional)** Install Vault, LuckPerms, and/or PlaceholderAPI for extra features.
@@ -220,7 +220,7 @@ On first launch, RankForge:
    ```
    [RankForge] [SoftDep] Vault=✓  LuckPerms=✓  PlaceholderAPI=✓  Floodgate=✗
    [RankForge] [Lang] Dynamically indexed 4 language profiles: [en, es, fil, id]
-   [RankForge] RankForge v2.6 successfully loaded! (5 ranks compiled)
+   [RankForge] RankForge v2.7 successfully loaded! (5 ranks compiled)
    ```
 3. Connects to MySQL (if configured) or initializes the YAML storage fallback
 4. Starts the TPS monitor and performance evaluator
@@ -941,6 +941,25 @@ A visual editor for rearranging rank icons in the GUI. Drag an icon from one slo
 
 Lists all players whose data is in the cache, with their rank shown on the icon. Clicking a player opens the `PlayerDataEditorGUI` where an admin can view and change that player's rank data directly.
 
+### Player Data Editor GUI (`PlayerDataEditorGUI`)
+
+A 54-slot editor opened by clicking any player in the Player List GUI. Provides the following buttons:
+
+| Slot | Button | Action |
+|------|--------|--------|
+| 4 | Player Head | Summary (UUID, rank, XP, balance, status) |
+| 10 | Rank | Click to change the player's rank (chat input) |
+| 12 | Experience | Click to set the player's experience (chat input) |
+| 14 | Balance | Click to set the player's economy balance (chat input) |
+| 16 | **Rank History** | Displays the selected player's last 10 rank changes directly in the administrator's chat |
+| 45 | ← Back | Return to the Player List GUI |
+| 49 | Reset | Reset the player's data to server defaults |
+| 53 | Close | Close the GUI |
+
+#### Rank History Button (Slot 16)
+
+Clicking the **Rank History** button sends the selected player's rank history directly to the administrator's chat — no new GUI or inventory is opened. The output is identical to running `/rank history` as that player: it uses the same `RankHistoryManager`, formatter, and display logic. Up to 10 entries are shown, newest first, including the timestamp, change type (Rankup / Set / Reset), and the from/to rank IDs. Works for both online and offline players.
+
 ### External GUI Registry (API)
 
 Developers can replace any GUI with their own implementation using `ExternalGUIRegistry`. See [Developer API](#-developer-api).
@@ -1020,7 +1039,7 @@ With PlaceholderAPI installed, RankForge registers all `%rankforge_*%` placehold
 | `%rankforge_player%` | `Steve` | Player's name |
 | `%rankforge_uuid%` | `xxxxxxxx-...` | Player's UUID |
 | `%rankforge_lang%` | `en` | Player's active language code |
-| `%rankforge_version%` | `2.6` | Plugin version |
+| `%rankforge_version%` | `2.7` | Plugin version |
 
 ### Scoreboard Example (CMI)
 
@@ -1260,7 +1279,7 @@ Plugin status and rank count.
 ```json
 {
   "plugin": "RankForge",
-  "version": "2.6",
+  "version": "2.7",
   "ranks": 5,
   "players": 12
 }
@@ -1357,7 +1376,7 @@ RankForge exposes a public API at `com.joshuaop.rankforge.api.RankForgeAPI`.
 <dependency>
   <groupId>com.github.JoshuaOP</groupId>
   <artifactId>RankForge</artifactId>
-  <version>2.6</version>
+  <version>2.7</version>
   <scope>provided</scope>
 </dependency>
 ```
@@ -1368,7 +1387,7 @@ repositories {
     maven { url 'https://jitpack.io' }
 }
 dependencies {
-    compileOnly 'com.github.JoshuaOP:RankForge:2.6'
+    compileOnly 'com.github.JoshuaOP:RankForge:2.7'
 }
 ```
 
@@ -1893,7 +1912,7 @@ A healthy startup looks like:
 [RankForge] [SoftDep] Vault=✓  LuckPerms=✓  PlaceholderAPI=✓  Floodgate=✗
 [RankForge] [Lang] Dynamically indexed 4 language profiles: [en, es, fil, id]
 [RankForge] [REST] API server listening on port 4567   ← (if enabled)
-[RankForge] RankForge v2.6 successfully loaded! (5 ranks compiled)
+[RankForge] RankForge v2.7 successfully loaded! (5 ranks compiled)
 ```
 
 If the rank count shows `(0 ranks compiled)`, `ranks.yml` failed to parse. Check for YAML syntax errors (indentation, missing colons, tab characters).

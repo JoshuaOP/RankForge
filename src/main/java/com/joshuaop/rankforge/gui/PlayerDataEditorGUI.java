@@ -22,7 +22,7 @@ import java.util.*;
  *   Slot 10 — Rank
  *   Slot 12 — Experience
  *   Slot 14 — Economy Balance (Vault-synced for online; stored value for offline)
- *   Slot 16 — Language
+ *   Slot 16 — Rank History
  *   Slot 45 — Back to Player List
  *   Slot 49 — Reset to default
  *   Slot 53 — Close
@@ -171,11 +171,8 @@ public class PlayerDataEditorGUI {
     }
 
     private void buildFields(Inventory inv, PlayerData data) {
-        String rankDisplay    = safeDisplayName(data.rankId());
-        String availableLangs = plugin.getLangManager() != null
-                ? String.join("/", plugin.getLangManager().getAvailableLangs())
-                : "en/es/fil/id";
-        boolean hasVault = plugin.getSoftDependency().hasVault();
+        String rankDisplay = safeDisplayName(data.rankId());
+        boolean hasVault   = plugin.getSoftDependency().hasVault();
         String moneyHint = hasVault
                 ? "§a▶ Click to set §8(updates Vault)"
                 : "§a▶ Click to set §7(stored value only — no Vault)";
@@ -186,8 +183,9 @@ public class PlayerDataEditorGUI {
                 String.valueOf(data.experience()), "§a▶ Click to set experience"));
         inv.setItem(14, field(Material.GOLD_INGOT, "§6§lBalance",
                 String.format("$%,.2f", data.money()), moneyHint));
-        inv.setItem(16, field(Material.BOOK, "§b§lLanguage",
-                data.language(), "§a▶ Click to change (" + availableLangs + ")"));
+        inv.setItem(16, makeBtn(Material.WRITTEN_BOOK, "§6§lRank History",
+                "§7Click to view this player's rank history",
+                "§a▶ Displays last 10 changes in chat"));
     }
 
     private void buildControls(Inventory inv) {
@@ -216,15 +214,46 @@ public class PlayerDataEditorGUI {
                     "§bEnter experience §7(e.g. 1000):", targetName);
             case 14 -> startEdit(admin, targetUuid, "money",
                     "§bEnter balance §7(e.g. 5000.0):", targetName);
-            case 16 -> {
-                String langs = plugin.getLangManager() != null
-                        ? String.join(", ", plugin.getLangManager().getAvailableLangs())
-                        : "en, es, fil, id";
-                startEdit(admin, targetUuid, "language",
-                        "§bEnter language code §7(" + langs + "):", targetName);
-            }
+            case 16 -> showHistoryForTarget(admin, targetUuid, targetName);
             default -> {}
         }
+    }
+
+    private void showHistoryForTarget(Player admin, UUID targetUuid, String targetName) {
+        if (plugin.getHistoryManager() == null) {
+            admin.sendMessage("§c[RankForge] History system not initialised.");
+            return;
+        }
+        if (targetUuid == null) {
+            admin.sendMessage("§c[RankForge] Cannot load history: invalid player UUID.");
+            return;
+        }
+
+        admin.sendMessage("§6[RankForge] §7Loading rank history for §e" + targetName + "§7…");
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            List<com.joshuaop.rankforge.experience.RankHistoryEntry> history =
+                    plugin.getHistoryManager().getHistory(targetUuid);
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (!admin.isOnline()) return;
+                admin.sendMessage("§8§m                              ");
+                admin.sendMessage("  §6Rank History §7for §e" + targetName
+                        + " §8(" + history.size() + " entries)");
+                admin.sendMessage("§8§m                              ");
+                if (history.isEmpty()) {
+                    admin.sendMessage("  §7No rank changes recorded yet.");
+                } else {
+                    int limit = Math.min(history.size(), 10);
+                    for (int i = 0; i < limit; i++) {
+                        admin.sendMessage("  " + history.get(i).toDisplayLine());
+                    }
+                    if (history.size() > 10) {
+                        admin.sendMessage("  §8… and " + (history.size() - 10) + " more entries.");
+                    }
+                }
+                admin.sendMessage("§8§m                              ");
+            });
+        });
     }
 
     private void startEdit(Player admin, UUID targetUuid, String field,
