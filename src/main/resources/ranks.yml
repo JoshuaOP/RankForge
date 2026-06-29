@@ -9,9 +9,9 @@
 #     money             — Vault balance required          (e.g. 5000.0)
 #     xp-level          — Minecraft XP level              (e.g. 10)
 #     permission        — Permission node player must have (e.g. vip.access)
-#     playtime-minutes  — Total playtime in minutes        (e.g. 120)
+#     playtime-minutes  — Real wall-clock playtime (minutes)(e.g. 120) — not tick-based
 #     mob-kills         — Total mob kills (vanilla stat)   (e.g. 50)
-#     block-breaks      — Total blocks mined (vanilla stat)(e.g. 500)
+#     block-breaks      — Total blocks broken (RankForge tracker, not vanilla stat)(e.g. 500)
 #     statistic-id      — Untyped Bukkit Statistic name    (e.g. JUMP, DEATHS)
 #     statistic-value   — Required value for statistic-id  (e.g. 100)
 #     quests            — List of quest IDs (checked via permission node:

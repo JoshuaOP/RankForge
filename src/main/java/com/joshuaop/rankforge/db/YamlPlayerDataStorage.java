@@ -22,10 +22,11 @@ import java.util.UUID;
  *   v1 — legacy (legacy-rank-node field)
  *   v2 — experience, money, language fields
  *   v3 — adds block-breaks (BlockBreakTracker exact counter)
+ *   v4 — adds playtime-minutes (real wall-clock playtime, not tick-based)
  */
 public class YamlPlayerDataStorage {
 
-    private static final int CURRENT_DATA_VERSION = 3;
+    private static final int CURRENT_DATA_VERSION = 4;
 
     private final RankForge       plugin;
     private final File            dataFile;
@@ -66,6 +67,7 @@ public class YamlPlayerDataStorage {
 
         if (savedVersion < 2) migrateV1ToV2();
         if (savedVersion < 3) migrateV2ToV3();
+        if (savedVersion < 4) migrateV3ToV4();
 
         yaml.set("data-version", CURRENT_DATA_VERSION);
         persist();
@@ -96,6 +98,27 @@ public class YamlPlayerDataStorage {
             }
         }
         plugin.getLogger().info("[Storage] v2→v3: added block-breaks field to all player records.");
+    }
+
+    /**
+     * v3 → v4: add playtime-minutes field defaulting to 0 for all existing entries.
+     * No conversion from the old vanilla PLAY_ONE_MINUTE statistic is performed because
+     * the tick-based stat is inherently inaccurate and would propagate that error forward.
+     * Players simply begin accumulating real-world playtime from this point onward.
+     */
+    private void migrateV3ToV4() {
+        ConfigurationSection players = yaml.getConfigurationSection("players");
+        if (players == null) return;
+        int count = 0;
+        for (String uuidStr : players.getKeys(false)) {
+            String path = "players." + uuidStr + ".playtime-minutes";
+            if (!yaml.contains(path)) {
+                yaml.set(path, 0L);
+                count++;
+            }
+        }
+        plugin.getLogger().info("[Storage] v3→v4: added playtime-minutes field to "
+                + count + " player records.");
     }
 
     // ── Player Read/Write ─────────────────────────────────────────────────────
@@ -163,12 +186,13 @@ public class YamlPlayerDataStorage {
 
     private void write(PlayerData data) {
         String path = "players." + data.uuid();
-        yaml.set(path + ".name",         data.playerName());
-        yaml.set(path + ".rank",         data.rankId());
-        yaml.set(path + ".experience",   data.experience());
-        yaml.set(path + ".money",        data.money());
-        yaml.set(path + ".language",     data.language());
-        yaml.set(path + ".block-breaks", data.blockBreaks());
+        yaml.set(path + ".name",             data.playerName());
+        yaml.set(path + ".rank",             data.rankId());
+        yaml.set(path + ".experience",       data.experience());
+        yaml.set(path + ".money",            data.money());
+        yaml.set(path + ".language",         data.language());
+        yaml.set(path + ".block-breaks",     data.blockBreaks());
+        yaml.set(path + ".playtime-minutes", data.playtimeMinutes());
     }
 
     private PlayerData fromSection(UUID uuid, ConfigurationSection s) {
@@ -176,12 +200,13 @@ public class YamlPlayerDataStorage {
                 ? plugin.getRankManager().getDefaultRankId() : "Guest";
         return new PlayerData(
                 uuid,
-                s.getString("name",  "Unknown"),
-                s.getString("rank",  defaultRank),
-                s.getLong("experience",     0L),
-                s.getDouble("money",        0.0),
-                s.getString("language",     "en"),
-                s.getLong("block-breaks",   0L)
+                s.getString("name",             "Unknown"),
+                s.getString("rank",             defaultRank),
+                s.getLong("experience",          0L),
+                s.getDouble("money",             0.0),
+                s.getString("language",          "en"),
+                s.getLong("block-breaks",        0L),
+                s.getLong("playtime-minutes",    0L)
         );
     }
 
@@ -193,7 +218,7 @@ public class YamlPlayerDataStorage {
     }
 
     /**
-     * Stitches live XP, Vault balance, and block-break count for online players
+     * Stitches live XP, Vault balance, block-break count, and playtime for online players
      * so saves always reflect the current session state.
      */
     private PlayerData stitchRuntimeData(PlayerData data) {
@@ -214,9 +239,13 @@ public class YamlPlayerDataStorage {
                 ? plugin.getBlockBreakTracker().getCount(player.getUniqueId())
                 : data.blockBreaks();
 
+        long livePlaytime = plugin.getPlaytimeTracker() != null
+                ? plugin.getPlaytimeTracker().getPlaytimeMinutes(player.getUniqueId())
+                : data.playtimeMinutes();
+
         return new PlayerData(
                 data.uuid(), player.getName(), data.rankId(),
-                liveXp, liveMoney, data.language(), liveBlocks
+                liveXp, liveMoney, data.language(), liveBlocks, livePlaytime
         );
     }
 }

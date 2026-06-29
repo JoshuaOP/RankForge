@@ -8,8 +8,8 @@ import org.bukkit.scheduler.BukkitTask;
  * Only started when MySQL is connected. YAML sync is handled separately in RankForge.
  * Interval is configured via sync.interval-ticks (default: 200 ticks = 10 s).
  *
- * Before each flush the BlockBreakTracker counters are flushed into the cache
- * so the persisted block-break values are always up-to-date.
+ * Before each flush the BlockBreakTracker and PlaytimeTracker counters are flushed
+ * into the cache so the persisted values are always up-to-date.
  */
 public class SyncService {
 
@@ -27,11 +27,14 @@ public class SyncService {
             CacheManager cache = getCache();
             if (cache == null) return;
 
-            // Flush all live block-break counters into the cache before saving,
-            // so the persisted values always reflect the current session totals.
-            // flushAll() is thread-safe (ConcurrentHashMap + AtomicLong).
+            // Flush all live block-break counters into the cache before saving.
             if (plugin.getBlockBreakTracker() != null) {
                 plugin.getBlockBreakTracker().flushAll();
+            }
+
+            // Flush all live playtime counters into the cache before saving.
+            if (plugin.getPlaytimeTracker() != null) {
+                plugin.getPlaytimeTracker().flushAll();
             }
 
             int count = 0;
@@ -57,7 +60,7 @@ public class SyncService {
     /**
      * Instantly pushes all active cache entries to the database.
      * Invoked synchronously during onDisable to safeguard player data.
-     * Block-break counters are flushed first.
+     * Block-break and playtime counters are flushed first.
      */
     public void flushNow() {
         CacheManager cache = getCache();
@@ -65,6 +68,10 @@ public class SyncService {
 
         if (plugin.getBlockBreakTracker() != null) {
             plugin.getBlockBreakTracker().flushAll();
+        }
+
+        if (plugin.getPlaytimeTracker() != null) {
+            plugin.getPlaytimeTracker().flushAll();
         }
 
         for (PlayerData data : cache.getOnlineAndUnexpired()) {

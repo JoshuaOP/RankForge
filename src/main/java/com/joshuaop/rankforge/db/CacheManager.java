@@ -13,8 +13,8 @@ import java.util.function.Predicate;
  * Entries expire after TTL of inactivity; call purgeExpired() periodically.
  *
  * Live-stitching injects the current session values for XP, Vault balance,
- * and block-break count from their respective live systems so callers always
- * receive up-to-date values without triggering a storage read.
+ * block-break count, and real-world playtime from their respective live systems
+ * so callers always receive up-to-date values without triggering a storage read.
  */
 public class CacheManager {
 
@@ -59,9 +59,6 @@ public class CacheManager {
      * Replace the rankId of any cached player whose current rank fails the given validity check.
      * Preserves the original TTL and online-state so the repair is transparent to the sync pipeline.
      * Call this after a ranks.yml reload to fix orphaned rank references.
-     *
-     * @param isValidRankId  predicate that returns true for rank IDs that still exist
-     * @param fallbackRankId the rank ID to assign when the player's current rank is invalid
      */
     public void repairOrphanedRankIds(Predicate<String> isValidRankId, String fallbackRankId) {
         for (Map.Entry<UUID, Entry> entry : cache.entrySet()) {
@@ -79,7 +76,7 @@ public class CacheManager {
     // ── Read ──────────────────────────────────────────────────────────────────
 
     /**
-     * Returns player data with live XP, Vault balance, and block-break count
+     * Returns player data with live XP, Vault balance, block-break count, and playtime
      * stitched in for online players.
      */
     public PlayerData get(UUID id) {
@@ -136,12 +133,14 @@ public class CacheManager {
     // ── Live Data Stitching ───────────────────────────────────────────────────
 
     /**
-     * Appends live XP, Vault balance, and block-break count for online players
-     * so cached records never return stale values during an active session.
+     * Appends live XP, Vault balance, block-break count, and real-world playtime
+     * for online players so cached records never return stale values during an active session.
      *
-     * <p>Block breaks are sourced from {@link com.joshuaop.rankforge.tracker.BlockBreakTracker}
-     * which maintains an exact {@link java.util.concurrent.atomic.AtomicLong} counter
-     * per UUID, replacing all vanilla statistic approximations.
+     * <p>Block breaks — sourced from {@link com.joshuaop.rankforge.tracker.BlockBreakTracker}
+     * (exact {@link java.util.concurrent.atomic.AtomicLong} counter).
+     *
+     * <p>Playtime — sourced from {@link com.joshuaop.rankforge.tracker.PlaytimeTracker}
+     * (wall-clock elapsed minutes; independent of server TPS).
      */
     private PlayerData stitchLiveData(PlayerData data, boolean isActiveOnline) {
         if (!isActiveOnline) return data;
@@ -167,9 +166,15 @@ public class CacheManager {
             liveBlockBreaks = plugin.getBlockBreakTracker().getCount(player.getUniqueId());
         }
 
+        // ── Live playtime from PlaytimeTracker (wall-clock, not ticks) ────────
+        long livePlaytime = data.playtimeMinutes();
+        if (plugin.getPlaytimeTracker() != null) {
+            livePlaytime = plugin.getPlaytimeTracker().getPlaytimeMinutes(player.getUniqueId());
+        }
+
         return new PlayerData(
                 data.uuid(), player.getName(), data.rankId(),
-                liveXp, liveMoney, data.language(), liveBlockBreaks
+                liveXp, liveMoney, data.language(), liveBlockBreaks, livePlaytime
         );
     }
 }

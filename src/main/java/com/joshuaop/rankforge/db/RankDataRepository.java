@@ -74,15 +74,16 @@ public class RankDataRepository {
     private void saveToMySQL(PlayerData data) {
         String sql = """
                 INSERT INTO rf_players
-                    (uuid, player_name, rank_id, experience, money, language, block_breaks)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                    (uuid, player_name, rank_id, experience, money, language, block_breaks, playtime_minutes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
-                    player_name  = VALUES(player_name),
-                    rank_id      = VALUES(rank_id),
-                    experience   = VALUES(experience),
-                    money        = VALUES(money),
-                    language     = VALUES(language),
-                    block_breaks = VALUES(block_breaks)
+                    player_name      = VALUES(player_name),
+                    rank_id          = VALUES(rank_id),
+                    experience       = VALUES(experience),
+                    money            = VALUES(money),
+                    language         = VALUES(language),
+                    block_breaks     = VALUES(block_breaks),
+                    playtime_minutes = VALUES(playtime_minutes)
                 """;
         try (Connection conn = db.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -93,6 +94,7 @@ public class RankDataRepository {
             ps.setDouble(5, data.money());
             ps.setString(6, data.language());
             ps.setLong(7,   data.blockBreaks());
+            ps.setLong(8,   data.playtimeMinutes());
             ps.executeUpdate();
         } catch (SQLException e) {
             plugin.getLogger().warning("[DB] MySQL save failed for " + data.uuid() + ": " + e.getMessage());
@@ -132,9 +134,13 @@ public class RankDataRepository {
     }
 
     private PlayerData fromResultSet(ResultSet rs) throws SQLException {
-        // block_breaks column may be absent in very old databases (before migration runs).
+        // block_breaks and playtime_minutes may be absent in older databases before migration runs.
         long blockBreaks = 0L;
         try { blockBreaks = rs.getLong("block_breaks"); }
+        catch (SQLException ignored) {}
+
+        long playtimeMinutes = 0L;
+        try { playtimeMinutes = rs.getLong("playtime_minutes"); }
         catch (SQLException ignored) {}
 
         return new PlayerData(
@@ -144,7 +150,8 @@ public class RankDataRepository {
                 rs.getLong("experience"),
                 rs.getDouble("money"),
                 rs.getString("language"),
-                blockBreaks
+                blockBreaks,
+                playtimeMinutes
         );
     }
 }

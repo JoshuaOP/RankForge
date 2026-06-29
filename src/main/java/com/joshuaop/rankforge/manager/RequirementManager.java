@@ -18,7 +18,7 @@ import java.util.*;
  *   money            — Vault balance
  *   xp-level         — Minecraft XP level
  *   permission        — Bukkit permission node
- *   playtime-minutes  — Total playtime via Statistic.PLAY_ONE_MINUTE
+ *   playtime-minutes  — Real wall-clock playtime tracked by PlaytimeTracker (not ticks)
  *   mob-kills         — Total mob kills via Statistic.MOB_KILLS
  *   block-breaks      — Exact cumulative count from BlockBreakTracker (not vanilla stats)
  *   statistic-id      — Any general untyped Bukkit Statistic name
@@ -94,20 +94,31 @@ public class RequirementManager {
             unmet.add("§7Permission: §c" + perm);
     }
 
+    /**
+     * Checks the player's playtime against the rank requirement.
+     *
+     * <p><strong>Source:</strong> {@link com.joshuaop.rankforge.tracker.PlaytimeTracker}
+     * — tracks real-world elapsed time using {@link System#currentTimeMillis()}.
+     * This is completely independent of server TPS, tick rate, or lag spikes.
+     *
+     * <p>The old approach of dividing {@code Statistic.PLAY_ONE_MINUTE} ticks by 1200
+     * has been removed entirely. That method was inaccurate because the vanilla statistic
+     * counts server ticks (affected by TPS) rather than wall-clock seconds.
+     */
     private void checkPlaytime(Player player, RankModel rank, List<String> unmet) {
         long requiredMinutes = rank.getRequiredPlaytimeMinutes();
         if (requiredMinutes <= 0) return;
-        try {
-            // PLAY_ONE_MINUTE tracks ticks played (1 min = 1200 ticks).
-            int  ticksPlayed    = player.getStatistic(Statistic.PLAY_ONE_MINUTE);
-            long minutesPlayed  = ticksPlayed / 1200L;
-            if (minutesPlayed < requiredMinutes)
-                unmet.add("§7Playtime: §c" + FormatUtil.formatTime(requiredMinutes)
-                        + " §8(have " + FormatUtil.formatTime(minutesPlayed) + ")");
-        } catch (Exception e) {
+
+        if (plugin.getPlaytimeTracker() == null) {
             if (plugin.isDebug())
-                plugin.getLogger().warning("[Requirements] Playtime check failed: " + e.getMessage());
+                plugin.getLogger().warning("[Requirements] PlaytimeTracker is null — playtime check skipped.");
+            return;
         }
+
+        long minutesPlayed = plugin.getPlaytimeTracker().getPlaytimeMinutes(player.getUniqueId());
+        if (minutesPlayed < requiredMinutes)
+            unmet.add("§7Playtime: §c" + FormatUtil.formatTime(requiredMinutes)
+                    + " §8(have " + FormatUtil.formatTime(minutesPlayed) + ")");
     }
 
     private void checkMobKills(Player player, RankModel rank, List<String> unmet) {
@@ -130,8 +141,6 @@ public class RequirementManager {
      * — an exact per-player {@link java.util.concurrent.atomic.AtomicLong} counter
      * incremented by a {@link org.bukkit.event.block.BlockBreakEvent} listener.
      * This is always accurate and never approximated via vanilla statistics.
-     *
-     * <p>Vanilla {@code Statistic.MINE_BLOCK} approximations have been removed entirely.
      */
     private void checkBlockBreaks(Player player, RankModel rank, List<String> unmet) {
         int required = rank.getRequiredBlockBreaks();

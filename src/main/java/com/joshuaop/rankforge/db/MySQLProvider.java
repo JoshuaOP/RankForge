@@ -14,6 +14,7 @@ import java.sql.Statement;
  *   v1 — rf_players (uuid, player_name, rank_id, experience, money, language, updated_at)
  *        rf_rank_log (id, uuid, from_rank, to_rank, ranked_at)
  *   v2 — rf_players + block_breaks BIGINT column (added via ALTER TABLE IF NOT EXISTS)
+ *   v3 — rf_players + playtime_minutes BIGINT column (real wall-clock time, not ticks)
  */
 public class MySQLProvider {
 
@@ -24,17 +25,17 @@ public class MySQLProvider {
     }
 
     public void createTables() {
-        // ── Create base tables ────────────────────────────────────────────────
         String createPlayers = """
                 CREATE TABLE IF NOT EXISTS rf_players (
-                    uuid         VARCHAR(36)  PRIMARY KEY,
-                    player_name  VARCHAR(24)  NOT NULL,
-                    rank_id      VARCHAR(64)  NOT NULL DEFAULT 'Guest',
-                    experience   BIGINT       NOT NULL DEFAULT 0,
-                    money        DOUBLE       NOT NULL DEFAULT 0.0,
-                    language     VARCHAR(8)   NOT NULL DEFAULT 'en',
-                    block_breaks BIGINT       NOT NULL DEFAULT 0,
-                    updated_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    uuid              VARCHAR(36)  PRIMARY KEY,
+                    player_name       VARCHAR(24)  NOT NULL,
+                    rank_id           VARCHAR(64)  NOT NULL DEFAULT 'Guest',
+                    experience        BIGINT       NOT NULL DEFAULT 0,
+                    money             DOUBLE       NOT NULL DEFAULT 0.0,
+                    language          VARCHAR(8)   NOT NULL DEFAULT 'en',
+                    block_breaks      BIGINT       NOT NULL DEFAULT 0,
+                    playtime_minutes  BIGINT       NOT NULL DEFAULT 0,
+                    updated_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
                         ON UPDATE CURRENT_TIMESTAMP
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
                 """;
@@ -60,15 +61,13 @@ public class MySQLProvider {
                     "[DB] Failed to create MySQL tables: " + e.getMessage());
         }
 
-        // ── Safe column migration for existing installations ──────────────────
-        // ALTER IGNORE / IF NOT EXISTS syntax varies across MySQL versions.
-        // We use a portable INFORMATION_SCHEMA check instead.
-        addColumnIfMissing("rf_players", "block_breaks",
-                "BIGINT NOT NULL DEFAULT 0");
+        // Safe column migrations for existing installations using INFORMATION_SCHEMA checks
+        addColumnIfMissing("rf_players", "block_breaks",     "BIGINT NOT NULL DEFAULT 0");
+        addColumnIfMissing("rf_players", "playtime_minutes", "BIGINT NOT NULL DEFAULT 0");
     }
 
     /**
-     * Idempotent ALTER TABLE — only adds the column if it doesn't exist yet.
+     * Idempotent ALTER TABLE — only adds the column if it does not already exist.
      * Uses INFORMATION_SCHEMA for maximum MySQL version compatibility.
      */
     private void addColumnIfMissing(String table, String column, String definition) {

@@ -6,7 +6,7 @@
 
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.17--1.21.4-brightgreen?style=for-the-badge&logo=minecraft)](https://www.minecraft.net/)
 [![Java](https://img.shields.io/badge/Java-21%2B-orange?style=for-the-badge&logo=openjdk)](https://adoptium.net/)
-[![Version](https://img.shields.io/badge/Version-2.7-purple?style=for-the-badge)](https://github.com/JoshuaOP/RankForge/releases)
+[![Version](https://img.shields.io/badge/Version-2.8-purple?style=for-the-badge)](https://github.com/JoshuaOP/RankForge/releases)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 [![bStats](https://img.shields.io/badge/bStats-31704-informational?style=for-the-badge)](https://bstats.org/plugin/bukkit/RankForge/31704)
 [![Issues](https://img.shields.io/github/issues/JoshuaOP/RankForge?style=for-the-badge)](https://github.com/JoshuaOP/RankForge/issues)
@@ -60,6 +60,10 @@
 - [💬 Support](#-support)
 - [📄 License](#-license)
 - [🙏 Credits](#-credits)
+- [⏱️ Real Playtime Tracking (v2.8)](#️-real-playtime-tracking-v28)
+- [🖥️ GUI Configuration (gui.yml)](#️-gui-configuration-guiyml)
+- [❓ Frequently Asked Questions (Extended)](#-frequently-asked-questions-1)
+- [🔧 Troubleshooting (Extended)](#-troubleshooting-1)
 
 ---
 
@@ -93,7 +97,7 @@ RankForge handles the entire lifecycle of rank progression:
 ### Requirements
 - 💰 **Money** — Vault economy balance
 - ⭐ **XP Level** — Vanilla Minecraft experience level
-- ⏱️ **Playtime** — Tracked via vanilla `PLAY_ONE_MINUTE` statistic
+- ⏱️ **Playtime** — Tracked via real wall-clock time (independent of server TPS)
 - ⚔️ **Mob Kills** — Tracked via vanilla `MOB_KILLS` statistic
 - 🪨 **Block Breaks** — Exact per-player counter via a dedicated event listener
 - 📊 **Bukkit Statistics** — Any untyped `Statistic` enum value
@@ -170,13 +174,13 @@ None. RankForge works out of the box with zero required dependencies.
 
 ## 🚀 Installation
 
-1. **Download** `RankForge-2.7.jar` from the [Spigot page](https://www.spigotmc.org/resources/%E2%9C%A6-rankforge-%E2%9A%A1.134929/).
+1. **Download** `RankForge-2.8.jar` from the [Spigot page](https://www.spigotmc.org/resources/%E2%9C%A6-rankforge-%E2%9A%A1.134929/).
 
 2. **Drop the JAR** into your `plugins/` directory:
    ```
    server/
    └── plugins/
-       └── RankForge-2.7.jar
+       └── RankForge-2.8.jar
    ```
 
 3. **(Optional)** Install Vault, LuckPerms, and/or PlaceholderAPI for extra features.
@@ -220,7 +224,7 @@ On first launch, RankForge:
    ```
    [RankForge] [SoftDep] Vault=✓  LuckPerms=✓  PlaceholderAPI=✓  Floodgate=✗
    [RankForge] [Lang] Dynamically indexed 4 language profiles: [en, es, fil, id]
-   [RankForge] RankForge v2.7 successfully loaded! (5 ranks compiled)
+   [RankForge] RankForge v2.8 successfully loaded! (5 ranks compiled)
    ```
 3. Connects to MySQL (if configured) or initializes the YAML storage fallback
 4. Starts the TPS monitor and performance evaluator
@@ -1039,7 +1043,7 @@ With PlaceholderAPI installed, RankForge registers all `%rankforge_*%` placehold
 | `%rankforge_player%` | `Steve` | Player's name |
 | `%rankforge_uuid%` | `xxxxxxxx-...` | Player's UUID |
 | `%rankforge_lang%` | `en` | Player's active language code |
-| `%rankforge_version%` | `2.7` | Plugin version |
+| `%rankforge_version%` | `2.8` | Plugin version |
 
 ### Scoreboard Example (CMI)
 
@@ -1279,7 +1283,7 @@ Plugin status and rank count.
 ```json
 {
   "plugin": "RankForge",
-  "version": "2.7",
+  "version": "2.8",
   "ranks": 5,
   "players": 12
 }
@@ -1376,7 +1380,7 @@ RankForge exposes a public API at `com.joshuaop.rankforge.api.RankForgeAPI`.
 <dependency>
   <groupId>com.github.JoshuaOP</groupId>
   <artifactId>RankForge</artifactId>
-  <version>2.7</version>
+  <version>2.8</version>
   <scope>provided</scope>
 </dependency>
 ```
@@ -1387,7 +1391,7 @@ repositories {
     maven { url 'https://jitpack.io' }
 }
 dependencies {
-    compileOnly 'com.github.JoshuaOP:RankForge:2.7'
+    compileOnly 'com.github.JoshuaOP:RankForge:2.8'
 }
 ```
 
@@ -1912,7 +1916,7 @@ A healthy startup looks like:
 [RankForge] [SoftDep] Vault=✓  LuckPerms=✓  PlaceholderAPI=✓  Floodgate=✗
 [RankForge] [Lang] Dynamically indexed 4 language profiles: [en, es, fil, id]
 [RankForge] [REST] API server listening on port 4567   ← (if enabled)
-[RankForge] RankForge v2.7 successfully loaded! (5 ranks compiled)
+[RankForge] RankForge v2.8 successfully loaded! (5 ranks compiled)
 ```
 
 If the rank count shows `(0 ranks compiled)`, `ranks.yml` failed to parse. Check for YAML syntax errors (indentation, missing colons, tab characters).
@@ -1996,6 +2000,347 @@ See [LICENSE](LICENSE) for the full text.
 | **bStats** ([Bastian](https://bstats.org/)) | Anonymous plugin analytics |
 | **Paper Team** | High-performance Bukkit fork |
 | **Community** | Bug reports, translations, feature suggestions |
+
+---
+
+## ⏱️ Real Playtime Tracking (v2.8)
+
+> **New in v2.8** — Playtime requirements now use real elapsed wall-clock time, not Minecraft ticks.
+
+### How It Works
+
+RankForge v2.8 introduces `PlaytimeTracker`, a dedicated listener that records the exact moment each player joins and calculates elapsed time using `System.currentTimeMillis()`. This is completely independent of the server's tick rate (TPS).
+
+**Previous behaviour (v2.8 and earlier):**
+```
+playtime = PLAY_ONE_MINUTE_stat / 1200   ← tick-based, affected by TPS drops
+```
+
+**New behaviour (v2.8+):**
+```
+playtime = (currentTimeMillis - joinTimeMillis) / 60_000   ← real wall-clock time
+```
+
+**Why this matters:**
+- On a lagging server (10 TPS), the old system would credit only **10 minutes** for every 20 minutes of real time.
+- A server reboot or GC pause would skew the tick counter permanently.
+- `PlaytimeTracker` is immune to all of this — if a player is online for 60 real minutes, they earn exactly 60 minutes.
+
+### Configuring `playtime-minutes`
+
+The configuration key is **unchanged** from previous versions. Set `playtime-minutes` inside a rank's `requirements` block:
+
+```yaml
+ranks:
+  Member:
+    requirements:
+      playtime-minutes: 60    # 60 real minutes of server playtime
+```
+
+```yaml
+ranks:
+  Veteran:
+    requirements:
+      playtime-minutes: 600   # 10 real hours
+```
+
+The value is always in **whole minutes**. Sub-minute precision (seconds) is intentionally discarded when saving — sessions shorter than 60 seconds do not count as a full minute.
+
+### Configuration Examples
+
+**Beginner server — short requirements:**
+```yaml
+ranks:
+  Newcomer:
+    requirements:
+      playtime-minutes: 0     # No playtime required
+
+  Member:
+    requirements:
+      playtime-minutes: 30    # 30 real minutes
+
+  Regular:
+    requirements:
+      playtime-minutes: 300   # 5 real hours
+```
+
+**Survival / vanilla server:**
+```yaml
+ranks:
+  Settler:
+    requirements:
+      playtime-minutes: 60    # 1 real hour
+
+  Veteran:
+    requirements:
+      playtime-minutes: 1200  # 20 real hours
+
+  Elder:
+    requirements:
+      playtime-minutes: 6000  # 100 real hours
+```
+
+**Prison server — combined with block-breaks:**
+```yaml
+ranks:
+  B:
+    requirements:
+      playtime-minutes: 60
+      block-breaks: 5000
+
+  C:
+    requirements:
+      playtime-minutes: 180
+      block-breaks: 25000
+```
+
+### Migration from v2.7
+
+No configuration changes are required. The `playtime-minutes` key in `ranks.yml` is identical. When upgrading:
+
+1. RankForge automatically migrates the YAML playerdata schema from v3 → v4, adding `playtime-minutes: 0` to all existing records.
+2. For MySQL, a `playtime_minutes` column is added automatically via `ALTER TABLE` on startup.
+3. All existing players start at `0` real minutes and accumulate from the point of upgrade onward.
+
+> **Note:** Previous tick-based values are **not** converted. Servers that want to credit existing players for time already played can use an admin command or manually edit `playerdata.yml`. This is intentional — converting inaccurate tick counts would propagate the existing error.
+
+### Tips and Best Practices
+
+- **Start low.** Begin with shorter playtime requirements (30–60 minutes) and increase them based on your player feedback.
+- **Combine with other requirements.** Playtime alone doesn't show engagement. Pair it with `block-breaks` or `mob-kills` for a richer progression curve.
+- **AFK players.** Playtime counts even while AFK. If you want to exclude AFK time, use a compatible AFK plugin that removes players from the server (which stops the timer), or use an activity-based requirement like `block-breaks` as the primary gate.
+- **Test before going live.** Use `/rank set <yourself> <rank>` and `/rank progress` to verify requirements display correctly.
+- **Reload safely.** Always use `/rank reload` — never `/reload`. A server reload can corrupt the tracker's session state.
+
+### Troubleshooting Playtime
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Playtime shows 0 after upgrade | Normal — existing data migrates to 0, accumulation begins fresh | No action needed; time will accumulate naturally |
+| Playtime not advancing | PlaytimeTracker not initialized | Check console for errors on startup; use `/rank version` to verify plugin loaded |
+| Playtime resets on relog | Data not saving before quit | Check storage errors in console; ensure `playerdata.yml` is writable |
+| Requirement shows wrong time | Stale cache | Run `/rank reload` to flush the cache |
+| MySQL column missing | Very old database, migration failed | Check console for `[DB] Column migration check failed` warnings |
+
+---
+
+## 🖥️ GUI Configuration (`gui.yml`)
+
+All GUI layout, appearance, and slot settings are controlled by `plugins/RankForge/gui.yml`. The file is auto-generated on first run and supports full customization without editing Java code.
+
+### File Location
+
+```
+plugins/
+└── RankForge/
+    └── gui.yml
+```
+
+### Structure Overview
+
+```yaml
+# Player-facing rank tree GUI (/rank)
+player-gui:
+  title: "&8✦ &6RankForge &8✦"       # GUI window title
+  border-material: CYAN_STAINED_GLASS_PANE  # Border block type
+  head-slot: 4                         # Slot for the player's head item
+  info-slot: 49                        # Slot for the info/progress item
+
+# Admin rank editor (/rank editor)
+admin-gui:
+  title: "&8✦ &cAdmin Rank Editor &8✦"
+  border-material: RED_STAINED_GLASS_PANE
+
+# Per-rank detail editor (click a rank in the admin editor)
+detail-editor:
+  title-prefix: "&8✦ &6Editing: "
+  border-top: LIME_STAINED_GLASS_PANE
+  border-bottom: GRAY_STAINED_GLASS_PANE
+
+# Drag-and-drop slot reassignment editor
+drag-drop:
+  title: "&8✦ &bSlot Editor &8✦"
+
+# Player list GUI (/rank playerlist)
+player-list:
+  title: "&8✦ &9Player List &8✦"
+  border-material: BLUE_STAINED_GLASS_PANE
+  prev-page-slot: 45
+  close-slot: 49
+  next-page-slot: 53
+
+# Player data editor (click a player in the player list)
+player-data-editor:
+  title-prefix: "&8✦ &9Editing: "
+  border-material: LIGHT_BLUE_STAINED_GLASS_PANE
+  block-breaks:
+    slot: 30
+    material: IRON_PICKAXE
+    name: "&7&lBlock Breaks"
+    lore:
+      - "&7Exact blocks broken (tracked by RankForge)."
+
+# Block-break stat panel settings
+block-break-stats:
+  show-in-rank-gui: true
+  show-in-player-data-editor: true
+  label: "&7Blocks Broken"
+  material: IRON_PICKAXE
+  value-format: "&a%count%"
+  unmet-format: "&cNeed &e%required% &cblocks &8(have &7%current%&8)"
+  met-format: "&a✔ &e%required% &ablocks broken"
+
+# Shared elements used across all GUIs
+common:
+  filler-material: GRAY_STAINED_GLASS_PANE
+  close-material: BARRIER
+  close-name: "&cClose"
+  back-material: ARROW
+  back-name: "&7Back"
+
+# Requirement status icons on the next-rank GUI item
+requirement-icons:
+  enabled: true
+  met-symbol: "&a✔"
+  unmet-symbol: "&c✘"
+  show-details: true
+
+# GUI themes (border colors)
+themes:
+  default:
+    player-border: CYAN_STAINED_GLASS_PANE
+    admin-border: RED_STAINED_GLASS_PANE
+    list-border: BLUE_STAINED_GLASS_PANE
+  dark:
+    player-border: BLACK_STAINED_GLASS_PANE
+    admin-border: RED_STAINED_GLASS_PANE
+    list-border: BLUE_STAINED_GLASS_PANE
+  gold:
+    player-border: YELLOW_STAINED_GLASS_PANE
+    admin-border: ORANGE_STAINED_GLASS_PANE
+    list-border: YELLOW_STAINED_GLASS_PANE
+```
+
+### Customization Tips
+
+- **Titles** support `&` color codes and most Bukkit formatting codes.
+- **Materials** must be valid Bukkit `Material` enum names (all uppercase, underscores).
+- **Slots** are 0-indexed inventory slots (0–53 for a 6-row chest).
+- Apply changes with `/rank reload` — no server restart needed.
+
+### GUI Reference
+
+| GUI | Command | Description |
+|-----|---------|-------------|
+| Rank Tree | `/rank` | Player-facing animated rank progression view |
+| Admin Editor | `/rank editor` | Create, edit, and delete ranks in-game |
+| Slot Editor | `/rank editor drag` | Drag-and-drop rank reordering |
+| Player List | `/rank playerlist` | Browse and edit all player data |
+| Player Data Editor | *(click player in list)* | Edit individual player rank/XP/money |
+
+---
+
+## ❓ Frequently Asked Questions
+
+### General
+
+**Q: Does RankForge work without Vault, LuckPerms, or PlaceholderAPI?**
+A: Yes. All three are optional. Without Vault, money requirements are skipped. Without LuckPerms, a Bukkit `PermissionAttachment` is used as fallback. Without PlaceholderAPI, the `%rankforge_*%` placeholders are simply unavailable.
+
+**Q: Can I have unlimited ranks?**
+A: Yes. RankForge loads every rank defined in `ranks.yml` with no hardcoded limit.
+
+**Q: Does RankForge support Bedrock players (Geyser/Floodgate)?**
+A: Yes. All storage and checks use UUID, not player name. The Bedrock prefix (`.` by default) is stripped from display names automatically.
+
+**Q: Will `/reload` (vanilla server reload) break the plugin?**
+A: It can. Always use `/rank reload` instead. The vanilla reload can corrupt in-memory state and discard unsaved playtime data.
+
+### Playtime
+
+**Q: How is playtime measured in v2.8?**
+A: Using `System.currentTimeMillis()` — real wall-clock time measured in milliseconds and stored as whole minutes. This is completely independent of server TPS.
+
+**Q: Does playtime count while the player is AFK?**
+A: Yes, by default. The timer runs from join to quit regardless of activity. If you need AFK detection, use an external AFK plugin that disconnects inactive players, or gate progression on activity-based requirements like `block-breaks`.
+
+**Q: Why did all players reset to 0 playtime after upgrading?**
+A: This is expected. Previous versions used the vanilla `PLAY_ONE_MINUTE` statistic (tick-based). Those inaccurate values are not migrated to avoid propagating existing errors. Players accumulate accurate real-world playtime from the upgrade point onward.
+
+**Q: What happens to playtime if the server crashes?**
+A: Playtime is periodically flushed to storage (every `sync.interval-ticks`, default 10 seconds). On a crash, up to 10 seconds of playtime may be lost. Clean shutdowns always flush everything before stopping.
+
+**Q: Can I manually set a player's playtime?**
+A: Currently, this must be done by editing `playerdata.yml` while the server is stopped (or via a MySQL UPDATE). A `/rank playtime set` admin command may be added in a future version.
+
+**Q: My playtime requirement shows "0min" in `/rank progress` even though I've been online for an hour.**
+A: This can happen if the tracker didn't initialize on join (e.g., the plugin reloaded while you were online). Rejoin the server — the tracker will re-register your session start. If the issue persists, check console for errors.
+
+**Q: Does playtime-minutes in ranks.yml still work without changes?**
+A: Yes. The configuration key is identical. No migration of `ranks.yml` is required — only the underlying implementation changed.
+
+### Storage
+
+**Q: Which storage backend should I use?**
+A: YAML is suitable for single servers. MySQL is recommended for networks, bungeecord/velocity proxies, or servers with more than a few hundred players. MySQL is also required if you want to query player data from external tools (dashboards, Discord bots, etc.).
+
+**Q: My MySQL connection fails. Will the server error out?**
+A: No. RankForge automatically falls back to YAML storage when MySQL is unavailable, logs a single info-level message, and continues loading normally.
+
+**Q: How do I migrate from YAML to MySQL?**
+A: Start the server with MySQL configured. RankForge will create the tables. Then manually export data from `playerdata.yml` and insert it into `rf_players`. A built-in migration tool may be added in a future version.
+
+---
+
+## 🔧 Troubleshooting
+
+### Plugin fails to load
+
+1. Check Java version: `java -version` must be 21 or higher.
+2. Confirm you are running Spigot or Paper 1.17+.
+3. Review the console for `[SEVERE]` messages from RankForge on startup.
+
+### Ranks not loading
+
+1. Ensure `ranks.yml` is valid YAML. Use [yaml-online-parser.appspot.com](https://yaml-online-parser.appspot.com/) to validate.
+2. Verify the `default-rank` value matches an actual rank key.
+3. Run `/rank reload` after editing the file.
+
+### `/rank up` does nothing
+
+1. Run `/rank progress` — this shows which requirements are unmet.
+2. Confirm the current rank has a `next-rank` set.
+3. Ensure you are not at the final rank (empty `next-rank`).
+
+### Playtime not advancing
+
+1. Check startup log — PlaytimeTracker registers on load. If there are errors, address them.
+2. Relog: the join event re-registers your session start.
+3. Check if `/rank requirements` shows a playtime line. If absent, the rank has `playtime-minutes: 0` (no requirement).
+
+### Playtime not saving after restart
+
+1. Check write permissions on `plugins/RankForge/data/playerdata.yml`.
+2. Confirm no `[YamlStorage] Failed to save` errors appear in console.
+3. For MySQL: check for `[DB] MySQL save failed` warnings.
+
+### GUI not opening
+
+1. Ensure no other plugin is cancelling inventory open events.
+2. Check for `GuiClickShieldManager` warnings in console.
+3. Confirm the player has `rankforge.rank.use` permission.
+
+### LuckPerms permissions not applying
+
+1. LuckPerms must be loaded **before** RankForge. Add `depend: [LuckPerms]` to LuckPerms's plugin.yml or ensure load order.
+2. Verify the permission nodes in `ranks.yml` are valid (no spaces, valid format).
+3. Use `/rank set <player> <rank>` to force a re-apply after fixing configuration.
+
+### MySQL tables not created
+
+1. Verify credentials in `config.yml` are correct.
+2. Ensure the database user has `CREATE TABLE`, `ALTER`, and `INSERT` privileges.
+3. Check console for `[DB] Failed to create MySQL tables` with the specific SQL error.
 
 ---
 

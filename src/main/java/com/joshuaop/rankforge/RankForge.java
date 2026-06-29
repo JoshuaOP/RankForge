@@ -31,6 +31,7 @@ import com.joshuaop.rankforge.protection.RankupQueue;
 import com.joshuaop.rankforge.rank.RankManager;
 import com.joshuaop.rankforge.softdep.SoftDependency;
 import com.joshuaop.rankforge.tracker.BlockBreakTracker;
+import com.joshuaop.rankforge.tracker.PlaytimeTracker;
 import com.joshuaop.rankforge.yaml.ConfigUpdater;
 import com.joshuaop.rankforge.yaml.RankYamlManager;
 import org.bstats.bukkit.Metrics;
@@ -73,6 +74,7 @@ public final class RankForge extends JavaPlugin {
     private AntiAbuseManager          antiAbuseManager;
     private RankupQueue               rankupQueue;
     private BlockBreakTracker         blockBreakTracker;
+    private PlaytimeTracker           playtimeTracker;
 
     // ── Experience & History ──────────────────────────────────────────────────
     private ExperienceManager         experienceManager;
@@ -96,7 +98,7 @@ public final class RankForge extends JavaPlugin {
         runConfigUpdater();
         initLang();
         initDatabase();
-        initYaml(); // REVISION: Kept before core managers so assets like guiConfig exist early
+        initYaml();
         initCoreManagers();
         initExperienceSystems();
         initAPIEcosystem();
@@ -120,9 +122,10 @@ public final class RankForge extends JavaPlugin {
         if (taskScheduler      != null) taskScheduler.cancelAll();
         if (cosmeticManager    != null) cosmeticManager.shutdown();
 
+        // Flush live counters into cache before saving
         if (blockBreakTracker  != null) blockBreakTracker.flushAll();
+        if (playtimeTracker    != null) playtimeTracker.flushAll();
 
-        // REVISION: Safer fall-through sync framework logic during unbind phases
         if (rankManager != null && rankManager.getCacheManager() != null) {
             if (syncService != null && databaseManager != null && databaseManager.isConnected()) {
                 try {
@@ -197,6 +200,7 @@ public final class RankForge extends JavaPlugin {
         rankupQueue           = new RankupQueue();
         cosmeticManager       = new CosmeticManager(this);
         blockBreakTracker     = new BlockBreakTracker(this);
+        playtimeTracker       = new PlaytimeTracker(this);
     }
 
     private void initExperienceSystems() {
@@ -246,6 +250,7 @@ public final class RankForge extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new GUIListener(this), this);
         getServer().getPluginManager().registerEvents(softDependency, this);
         getServer().getPluginManager().registerEvents(blockBreakTracker, this);
+        getServer().getPluginManager().registerEvents(playtimeTracker, this);
         if (cosmeticManager != null) cosmeticManager.registerListeners();
     }
 
@@ -268,29 +273,36 @@ public final class RankForge extends JavaPlugin {
         updateChecker.checkOnStartup();
     }
 
-    // REVISION: Abstracted repeating background registrations to simplify logic reuse inside reloads
     private void startRepeatingTasks() {
         if (taskScheduler == null) return;
-        
+
         taskScheduler.repeatAsync(() -> {
             if (rankManager != null && rankManager.getCacheManager() != null) {
                 rankManager.getCacheManager().purgeExpired();
             }
         }, 6000L, 6000L);
-        
+
         taskScheduler.repeatAsync(() -> {
             if (antiAbuseManager != null) antiAbuseManager.purge();
         }, 2400L, 2400L);
 
-        long blockFlushInterval = getConfig() != null ? getConfig().getLong("tracker.block-break-flush-ticks", 100L) : 100L;
+        long blockFlushInterval = getConfig() != null
+                ? getConfig().getLong("tracker.block-break-flush-ticks", 100L) : 100L;
         taskScheduler.repeatAsync(() -> {
             if (blockBreakTracker != null) blockBreakTracker.flushAll();
         }, blockFlushInterval, blockFlushInterval);
 
+        // Flush playtime on the same interval as block-breaks for consistency
+        taskScheduler.repeatAsync(() -> {
+            if (playtimeTracker != null) playtimeTracker.flushAll();
+        }, blockFlushInterval, blockFlushInterval);
+
         if (databaseManager != null && !databaseManager.isConnected()) {
-            long yamlSyncInterval = getConfig() != null ? getConfig().getLong("sync.interval-ticks", 200L) : 200L;
+            long yamlSyncInterval = getConfig() != null
+                    ? getConfig().getLong("sync.interval-ticks", 200L) : 200L;
             taskScheduler.repeatAsync(() -> {
-                if (yamlPlayerDataStorage != null && rankManager != null && rankManager.getCacheManager() != null) {
+                if (yamlPlayerDataStorage != null && rankManager != null
+                        && rankManager.getCacheManager() != null) {
                     var snapshot = rankManager.getCacheManager().getOnlineAndUnexpired();
                     if (!snapshot.isEmpty()) yamlPlayerDataStorage.saveAll(snapshot);
                 }
@@ -301,7 +313,6 @@ public final class RankForge extends JavaPlugin {
     // ── Hot-reload ────────────────────────────────────────────────────────────
 
     public void reload() {
-        // REVISION: Cleared active schedules to avoid concurrent worker thread creep
         if (taskScheduler != null) taskScheduler.cancelAll();
         if (cosmeticManager != null) cosmeticManager.shutdown();
 
@@ -319,10 +330,9 @@ public final class RankForge extends JavaPlugin {
         if (updateChecker != null) updateChecker.reload();
         if (expansionRegistry != null) expansionRegistry.reloadAll();
         if (guiConfig != null) guiConfig.load();
-        
+
         com.joshuaop.rankforge.gui.PlayerListGUI.clearHeadCache();
 
-        // Restart repeating loops cleanly
         startRepeatingTasks();
 
         if (cosmeticManager != null && rankManager != null) {
@@ -369,6 +379,7 @@ public final class RankForge extends JavaPlugin {
     public AntiAbuseManager              getAntiAbuseManager()             { return antiAbuseManager; }
     public RankupQueue                   getRankupQueue()                  { return rankupQueue; }
     public BlockBreakTracker             getBlockBreakTracker()            { return blockBreakTracker; }
+    public PlaytimeTracker               getPlaytimeTracker()              { return playtimeTracker; }
     public GUIConfig                     getGuiConfig()                    { return guiConfig; }
     public ExperienceManager             getExperienceManager()            { return experienceManager; }
     public RankHistoryManager            getHistoryManager()               { return historyManager; }
@@ -377,5 +388,5 @@ public final class RankForge extends JavaPlugin {
     public HookRegistry                  getHookRegistry()                 { return hookRegistry; }
     public ExternalGUIRegistry           getExternalGUIRegistry()          { return externalGUIRegistry; }
     public RestAPIServer                 getRestAPIServer()                 { return restAPIServer; }
-    public UpdateChecker                 getUpdateChecker()                 { return updateChecker; }
+    public UpdateChecker                 getUpdateChecker()                { return updateChecker; }
 }
