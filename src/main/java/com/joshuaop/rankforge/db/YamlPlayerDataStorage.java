@@ -143,17 +143,13 @@ public class YamlPlayerDataStorage {
     }
 
     public synchronized void savePlayer(PlayerData data) {
-        if (!yaml.contains("data-version"))
-            yaml.set("data-version", CURRENT_DATA_VERSION);
-
         PlayerData stitched = stitchRuntimeData(data);
         write(stitched);
         persist();
     }
 
     public synchronized void saveAll(Collection<PlayerData> players) {
-        yaml.set("data-version", CURRENT_DATA_VERSION);
-        for (PlayerData data : players) write(stitchRuntimeData(data));
+        for (PlayerData data : players) write(data);
         persist();
     }
 

@@ -76,8 +76,11 @@ public class DatabaseManager {
             plugin.getLogger().info("[DB] Connected to MySQL successfully.");
             return true;
         } catch (Exception e) {
+            String reason = e.getMessage() != null
+                    ? e.getMessage().split("\\.")[0]
+                    : e.getClass().getSimpleName();
             plugin.getLogger().info("[DB] MySQL not available — using YAML file storage. ("
-                    + e.getMessage().split("\\.")[0] + ")");
+                    + reason + ")");
             if (dataSource != null && !dataSource.isClosed()) dataSource.close();
             dataSource = null;
             return false;

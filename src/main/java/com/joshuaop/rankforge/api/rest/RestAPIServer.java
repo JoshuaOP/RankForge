@@ -147,6 +147,7 @@ public class RestAPIServer {
         if (path.equals("/api/ranks"))      return buildRanks();
         if (path.startsWith("/api/player/")) {
             String uuidStr = path.substring("/api/player/".length());
+            if (uuidStr.isBlank()) return null; // returns 404 Not Found
             return buildPlayer(uuidStr);
         }
         return null;

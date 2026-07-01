@@ -42,7 +42,7 @@ public class YamlSerializer {
 
         // ── Optional requirements (only written when non-default) ─────────────
         if (r.getRequiredPlaytimeMinutes() > 0)
-            cfg.set(b + ".requirements.playtime-minutes",  r.getRequiredPlaytimeMinutes());
+            cfg.set(b + ".requirements.playtime", minutesToPlaytimeString(r.getRequiredPlaytimeMinutes()));
 
         if (r.getRequiredMobKills() > 0)
             cfg.set(b + ".requirements.mob-kills",         r.getRequiredMobKills());
@@ -66,5 +66,23 @@ public class YamlSerializer {
                 cfg.set(b + ".requirements.items." + entry.getKey(), entry.getValue());
             }
         }
+    }
+
+    /**
+     * Converts a total-minutes value into the unified playtime string format.
+     * Examples: 60 → "1hr", 90 → "1hr 30m", 1500 → "1d 1hr", 5765 → "4d 0hr 5m"
+     * Only non-zero components are included, except when all are zero (returns "0m").
+     */
+    private String minutesToPlaytimeString(long minutes) {
+        if (minutes <= 0) return "0m";
+        long days  = minutes / (24L * 60L);
+        long hours = (minutes % (24L * 60L)) / 60L;
+        long mins  = minutes % 60L;
+        StringBuilder sb = new StringBuilder();
+        if (days  > 0) sb.append(days).append("d ");
+        if (hours > 0) sb.append(hours).append("hr ");
+        if (mins  > 0) sb.append(mins).append("m");
+        String result = sb.toString().trim();
+        return result.isEmpty() ? "0m" : result;
     }
 }

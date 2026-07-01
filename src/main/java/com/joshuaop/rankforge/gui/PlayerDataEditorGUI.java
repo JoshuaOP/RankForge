@@ -94,9 +94,8 @@ public class PlayerDataEditorGUI {
     private PlayerData loadTargetData(UUID uuid, String name) {
         try {
             var cache = plugin.getRankManager().getCacheManager();
-            PlayerData data = cache.contains(uuid)
-                    ? cache.get(uuid)
-                    : plugin.getRankManager().getRepository().load(uuid, name);
+            PlayerData data = cache.get(uuid);
+            if (data == null) data = plugin.getRankManager().getRepository().load(uuid, name);
 
             if (data == null) {
                 String defaultRank = plugin.getConfig().getString("ranks.default-rank", "Guest");

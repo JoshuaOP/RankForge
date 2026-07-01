@@ -15,11 +15,13 @@ import java.util.*;
  * Evaluates whether a player meets all requirements for a given rank.
  *
  * Built-in requirement types (configured per-rank in ranks.yml):
- *   money            — Vault balance
- *   xp-level         — Minecraft XP level
- *   permission        — Bukkit permission node
- *   playtime-minutes  — Real wall-clock playtime tracked by PlaytimeTracker (not ticks)
- *   mob-kills         — Total mob kills via Statistic.MOB_KILLS
+ *   money     — Vault balance
+ *   xp-level  — Minecraft XP level
+ *   permission — Bukkit permission node
+ *   playtime   — Real wall-clock playtime tracked by PlaytimeTracker (not ticks)
+ *               Format: "5d 5hr 5m 5s" (d=days, hr=hours, m=minutes, s=seconds)
+ *               Legacy key "playtime-minutes: 60" is still accepted for backward compatibility.
+ *   mob-kills  — Total mob kills via Statistic.MOB_KILLS
  *   block-breaks      — Exact cumulative count from BlockBreakTracker (not vanilla stats)
  *   statistic-id      — Any general untyped Bukkit Statistic name
  *   statistic-value   — Required value for statistic-id

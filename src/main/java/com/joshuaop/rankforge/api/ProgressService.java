@@ -149,10 +149,9 @@ public class ProgressService {
         long requiredMin = next.getRequiredPlaytimeMinutes();
         if (requiredMin <= 0) return;
         long haveMin = 0L;
-        try {
-            int ticks = player.getStatistic(Statistic.PLAY_ONE_MINUTE);
-            haveMin = ticks / 1200L;
-        } catch (Exception ignored) {}
+        if (plugin.getPlaytimeTracker() != null) {
+            haveMin = plugin.getPlaytimeTracker().getPlaytimeMinutes(player.getUniqueId());
+        }
         double pct = Math.min(100.0, ((double) haveMin / requiredMin) * 100.0);
         out.add(new RequirementProgress("Playtime",
                 FormatUtil.formatTime(haveMin), FormatUtil.formatTime(requiredMin), pct));
@@ -213,12 +212,25 @@ public class ProgressService {
         if (statId == null || statId.isBlank() || reqVal <= 0) return;
         try {
             Statistic stat = Statistic.valueOf(statId.toUpperCase());
-            if (stat.getType() != Statistic.Type.UNTYPED) return;
+            if (stat.getType() != Statistic.Type.UNTYPED) {
+                if (plugin.isDebug())
+                    plugin.getLogger().warning("[ProgressService] Statistic '" + statId
+                            + "' is not UNTYPED and cannot be read without a type parameter.");
+                return;
+            }
             int have = player.getStatistic(stat);
             double pct = Math.min(100.0, ((double) have / reqVal) * 100.0);
             out.add(new RequirementProgress("Stat: " + statId,
                     String.format("%,d", have), String.format("%,d", reqVal), pct));
-        } catch (Exception ignored) {}
+        } catch (IllegalArgumentException e) {
+            if (plugin.isDebug())
+                plugin.getLogger().warning("[ProgressService] Unknown statistic '" + statId
+                        + "' — check ranks.yml spelling. Skipping progress entry.");
+        } catch (Exception e) {
+            if (plugin.isDebug())
+                plugin.getLogger().warning("[ProgressService] Statistic check failed for '"
+                        + statId + "': " + e.getMessage());
+        }
     }
 
     private void addCustom(Player player, RankModel next, List<RequirementProgress> out) {

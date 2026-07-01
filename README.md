@@ -2344,6 +2344,478 @@ A: Start the server with MySQL configured. RankForge will create the tables. The
 
 ---
 
+---
+
+## 🛠️ Setup & Configuration Guide
+
+This guide walks through every step of installing and configuring RankForge from scratch.
+
+---
+
+### 📥 Installation Guide
+
+#### Step 1 — Download RankForge
+
+Download the latest `RankForge-*.jar` from the [SpigotMC resource page](https://www.spigotmc.org/resources/%E2%9C%A6-rankforge-%E2%9A%A1.134929/).
+
+#### Step 2 — Install the plugin
+
+Drop the JAR into your server's `plugins/` folder:
+
+```
+server/
+└── plugins/
+    └── RankForge-2.8.jar
+```
+
+#### Step 3 — Install optional dependencies
+
+Install any of the following soft dependencies for additional features:
+
+| Plugin | Purpose |
+|--------|---------|
+| **Vault** | Money requirements and economy balance tracking |
+| **LuckPerms** | Automatic permission group management on rankup |
+| **PlaceholderAPI** | `%rankforge_*%` placeholders in other plugins |
+| **Floodgate / Geyser** | Bedrock crossplay player name handling |
+| **MySQL** | (Configure in `config.yml`) Persistent relational storage for networks |
+
+None are required — RankForge works out of the box with no dependencies.
+
+#### Step 4 — Start the server
+
+Start your server once. RankForge auto-generates all configuration files:
+
+```
+plugins/RankForge/
+├── config.yml
+├── ranks.yml
+├── gui.yml
+└── lang/
+    ├── en.yml
+    ├── es.yml
+    ├── fil.yml
+    └── id.yml
+```
+
+#### Step 5 — Configure the plugin
+
+Edit the generated files (see the [Configuration Guide](#-configuration-guide-1) below).
+
+#### Step 6 — Reload or restart
+
+Apply your changes without a full restart:
+
+```
+/rank reload
+```
+
+> [!WARNING]
+> Never use the vanilla `/reload` command. It can corrupt in-memory player data and break the playtime tracker. Always use `/rank reload`.
+
+---
+
+### ⚙️ Configuration Guide
+
+#### `config.yml`
+
+The master settings file. Key sections:
+
+| Section | Key | Description |
+|---------|-----|-------------|
+| `language` | `default` | Default language code (`en`, `es`, `fil`, `id`) |
+| `language` | `per-player` | Allow players to pick their own language |
+| `announcements` | `rankup.broadcast` | Broadcast message to all players on rankup |
+| `announcements` | `rankup.title` | Full-screen title shown to the ranking-up player |
+| `cosmetic` | `bossbar.enabled` | Boss bar on rankup and progress checks |
+| `cosmetic` | `tablist.enabled` | Show rank prefix in the player list |
+| `cosmetic` | `particles.enabled` | Particle trail around the player on rankup |
+| `storage` | `type` | `yaml` (default) or `mysql` |
+| `storage` | `mysql.*` | Host, port, database, username, password, pool-size |
+| `performance` | `modes.*-tps-threshold` | TPS thresholds for HIGH / MEDIUM / LOW cosmetic modes |
+| `crossplay` | `bedrock-prefix` | Floodgate prefix to strip from Bedrock player names |
+| `rest-api` | `enabled` | Enable the optional embedded HTTP API |
+| `debug` | *(boolean)* | Enable verbose debug logging |
+
+#### `ranks.yml`
+
+Defines every rank. Each top-level key under `ranks:` is a rank ID.
+
+```yaml
+default-rank: Guest   # Rank assigned to new / unknown players
+
+ranks:
+  RankId:
+    display-name: "&aDisplay Name"
+    next-rank: "NextRankId"       # Empty string = final rank
+    slot: 11                      # GUI inventory slot (0–53)
+    material: GREEN_WOOL          # Bukkit Material name
+    lore:
+      - "&7Description line"
+    chat-prefix: "&a[Tag]"
+    permissions:
+      - "some.permission.node"
+    commands:
+      - "lp user %player% group set rankid"
+    requirements:
+      money: 1000
+      xp-level: 10
+      playtime: 1hr               # New unified format (see Requirements Guide)
+      mob-kills: 50
+      block-breaks: 500
+      permission: "some.required.node"
+      statistic-id: "FISH_CAUGHT"
+      statistic-value: 10
+      quests:
+        - "quest_id"
+      worlds:
+        - "world"
+      items:
+        DIAMOND: 5
+```
+
+#### Language files (`lang/en.yml`, `lang/fil.yml`, `lang/id.yml`, `lang/es.yml`)
+
+Located in `plugins/RankForge/lang/`. Each file contains:
+
+- `prefix:` — the `[RankForge]` prefix shown before messages
+- `messages:` — every translatable message string
+
+To add a language, copy `en.yml` to a new file (e.g., `de.yml`), translate the `messages` block, and run `/rank reload`. Players switch languages with `/rank lang set de`.
+
+#### `gui.yml`
+
+Controls all GUI titles, border materials, slot positions, icons, and themes. Every GUI in RankForge is configurable here without touching any Java code. Apply changes with `/rank reload`.
+
+#### YAML storage
+
+Default. Player data is stored in `plugins/RankForge/data/playerdata.yml` and synced every `sync.interval-ticks` (default: 200 ticks = 10 seconds). A final flush always runs on clean shutdown.
+
+#### MySQL storage
+
+```yaml
+storage:
+  type: mysql
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "rankforge"
+    username: "rankforge_user"
+    password: "your_password"
+    pool-size: 10
+```
+
+Tables are created automatically. HikariCP handles connection pooling. If the connection fails at startup, RankForge falls back to YAML automatically.
+
+---
+
+### 🏅 Rank Creation Guide
+
+#### Creating a rank
+
+Add a new key under `ranks:` in `ranks.yml`:
+
+```yaml
+ranks:
+  Builder:
+    display-name: "&e[Builder]"
+    next-rank: "Veteran"
+    slot: 13
+    material: BRICKS
+    lore:
+      - "&7A creative builder."
+    chat-prefix: "&e[Builder]"
+```
+
+Reload with `/rank reload`. You can also create ranks in-game with `/rank create <id>`.
+
+#### Linking rank chains
+
+Each rank points to the next via `next-rank`. Leave it empty for the final rank:
+
+```
+Guest → Member → Veteran → Elite → (empty, final rank)
+```
+
+#### Configuring rewards
+
+```yaml
+ranks:
+  Member:
+    permissions:
+      - "essentials.sethome.multiple.2"   # Applied when player holds this rank
+    commands:
+      - "lp user %player% group set member"   # Runs on rankup
+      - "eco take %player% 1000"
+```
+
+#### Configuring permissions
+
+- **`permissions:`** — nodes granted while the player holds this rank (managed by LuckPerms or Bukkit attachment)
+- **`commands:`** — console commands executed at the moment of rankup (`%player%` is replaced with the player's name)
+
+#### Configuring requirements
+
+See the [Requirements Guide](#-requirements-guide) below for all supported types and the new playtime format.
+
+---
+
+### 📋 Requirements Guide
+
+All requirements are defined inside a `requirements:` block within each rank entry.
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `money` | Double | Vault balance required. `0` = no requirement. |
+| `xp-level` | Integer | Vanilla Minecraft XP level. |
+| `permission` | String | A single permission node the player must have. |
+| `playtime` | String | Real wall-clock playtime (see format below). |
+| `mob-kills` | Integer | Total mob kills via `MOB_KILLS` statistic. |
+| `block-breaks` | Integer | Block breaks tracked by RankForge's counter. |
+| `statistic-id` | String | Any untyped Bukkit `Statistic` enum name. |
+| `statistic-value` | Integer | Required value for `statistic-id`. |
+| `quests` | List\<String\> | Quest IDs checked as `rankforge.quest.completed.<id>`. |
+| `worlds` | List\<String\> | Player must be in one of these world names. |
+| `items` | Map | `MATERIAL_NAME: amount` pairs. Items must be in inventory. |
+
+#### Playtime Requirement Format
+
+The `playtime` key uses a single human-readable string. **This is the recommended format.**
+
+**Supported units:**
+
+| Unit | Meaning |
+|------|---------|
+| `d`  | Days (1d = 1440 minutes) |
+| `hr` | Hours (1hr = 60 minutes) |
+| `m`  | Minutes |
+| `s`  | Seconds (truncated to whole minutes; < 60s = 0) |
+
+Units are **case-insensitive** (`D`, `HR`, `M`, `S` all work). Extra whitespace is ignored. Any combination of units is accepted.
+
+**Examples:**
+
+```yaml
+requirements:
+  playtime: 30m           # 30 minutes
+
+requirements:
+  playtime: 2hr           # 2 hours (120 minutes)
+
+requirements:
+  playtime: 7d            # 7 days (10,080 minutes)
+
+requirements:
+  playtime: 1d 12hr       # 1 day and 12 hours (2,160 minutes)
+
+requirements:
+  playtime: 5d 5hr 5m 5s  # 5 days, 5 hours, 5 minutes (seconds truncated)
+
+requirements:
+  playtime: 45s           # 45 seconds → 0 whole minutes (no requirement in effect)
+```
+
+**Backward compatibility:**
+
+Existing configurations using `playtime-minutes` continue to work without any changes:
+
+```yaml
+requirements:
+  playtime-minutes: 60    # Still fully supported — equals "1hr"
+```
+
+The loader checks for `playtime` first; if absent, it falls back to `playtime-minutes`. No edits to existing `ranks.yml` files are required.
+
+**Full example rank using the new format:**
+
+```yaml
+ranks:
+  Veteran:
+    display-name: "&2[Veteran]"
+    next-rank: "Elite"
+    slot: 15
+    material: EMERALD
+    chat-prefix: "&2[Veteran]"
+    commands:
+      - "lp user %player% group set veteran"
+    requirements:
+      money: 10000
+      xp-level: 30
+      playtime: 10hr
+      mob-kills: 100
+      block-breaks: 5000
+      items:
+        DIAMOND: 10
+```
+
+---
+
+### ⌨️ Commands Guide
+
+#### Player Commands
+
+| Command | Permission | Description |
+|---------|-----------|-------------|
+| `/rank` | `rankforge.rank.use` | Open the animated rank tree GUI |
+| `/rank up` | `rankforge.rank.up` | Attempt to rank up to the next rank |
+| `/rank progress` | `rankforge.rank.progress` | Show a progress bar and requirement breakdown |
+| `/rank next` | `rankforge.rank.next` | Show your next rank's display name |
+| `/rank current` | `rankforge.rank.current` | Show your current rank |
+| `/rank requirements` | `rankforge.rank.requirements` | List unmet requirements for the next rank |
+| `/rank history` | `rankforge.rank.history` | View your last 10 rank changes |
+| `/rank xp` | `rankforge.rank.use` | View your custom RankForge XP |
+| `/rank lang set <code>` | `rankforge.rank.lang` | Set your preferred language |
+| `/rank lang list` | `rankforge.rank.lang` | List all available languages |
+| `/rank lang reset` | `rankforge.rank.lang` | Reset to the server default language |
+| `/rank version` | `rankforge.rank.system.version` | Show plugin and system information |
+| `/rank help` | *(none)* | Show the help screen |
+
+#### Admin Commands
+
+| Command | Permission | Description |
+|---------|-----------|-------------|
+| `/rank editor` | `rankforge.rank.editor` | Open the admin rank editor GUI |
+| `/rank editor <rankId>` | `rankforge.rank.editor` | Open the editor for a specific rank |
+| `/rank editor drag` | `rankforge.rank.editor.drag` | Open the drag-and-drop slot editor |
+| `/rank create <id>` | `rankforge.rank.create` | Create a new rank with a specific ID |
+| `/rank delete <id>` | `rankforge.rank.delete` | Delete a rank (prompts for confirmation) |
+| `/rank set <player> <rank>` | `rankforge.rank.set` | Set a player's rank (online or offline) |
+| `/rank force <player> <rank>` | `rankforge.rank.force` | Force-set a rank bypassing all checks |
+| `/rank reset <player>` | `rankforge.rank.reset` | Reset a player to the default rank |
+| `/rank reload` | `rankforge.rank.reload` | Hot-reload all configuration files |
+| `/rank playerlist` | `rankforge.rank.playerlist` | Browse all player rank data in a GUI |
+| `/rank xp set <player> <amount>` | `rankforge.rank.xp.set` | Set a player's custom XP |
+| `/rank xp add <player> <amount>` | `rankforge.rank.xp.add` | Add custom XP to a player |
+| `/rank security` | `rankforge.rank.security` | View the admin rollback audit log |
+| `/rank history <player>` | `rankforge.rank.admin` | View another player's rank history |
+
+---
+
+### 🔑 Permissions Guide
+
+| Permission | Description |
+|-----------|-------------|
+| `rankforge.rank.use` | Open the rank GUI and view XP |
+| `rankforge.rank.up` | Use `/rank up` to attempt rankup |
+| `rankforge.rank.progress` | View requirement progress |
+| `rankforge.rank.next` | View next rank |
+| `rankforge.rank.current` | View current rank |
+| `rankforge.rank.requirements` | List unmet requirements |
+| `rankforge.rank.history` | View own rank history |
+| `rankforge.rank.lang` | Change personal language |
+| `rankforge.rank.system.version` | View plugin version info |
+| `rankforge.rank.editor` | Access the admin rank editor GUI |
+| `rankforge.rank.editor.drag` | Access the drag-and-drop slot editor |
+| `rankforge.rank.create` | Create new ranks |
+| `rankforge.rank.delete` | Delete ranks |
+| `rankforge.rank.set` | Set any player's rank |
+| `rankforge.rank.force` | Force-set a rank bypassing requirements |
+| `rankforge.rank.reset` | Reset any player to the default rank |
+| `rankforge.rank.reload` | Reload plugin configuration |
+| `rankforge.rank.playerlist` | Browse the player list GUI |
+| `rankforge.rank.xp.set` | Set a player's custom XP |
+| `rankforge.rank.xp.add` | Add custom XP to a player |
+| `rankforge.rank.security` | View the anti-abuse audit log |
+| `rankforge.rank.admin` | General admin access (view other players' history) |
+| `rankforge.quest.completed.<id>` | Marks a quest as complete for requirement checks |
+
+---
+
+### 📊 PlaceholderAPI Guide
+
+With PlaceholderAPI installed, all `%rankforge_*%` placeholders are available in any PAPI-compatible plugin (scoreboards, chat formatters, holograms, tab lists, etc.).
+
+| Placeholder | Example Output | Description |
+|------------|---------------|-------------|
+| `%rankforge_rank%` | `Veteran` | Current rank ID |
+| `%rankforge_rank_name%` | `&2[Veteran]` | Current rank display name |
+| `%rankforge_rank_display%` | `&2[Veteran]` | Alias for `rank_name` |
+| `%rankforge_rank_prefix%` | `&2[Veteran]` | Current rank's `chat-prefix` |
+| `%rankforge_rank_position%` | `3` | Position in the rank chain (1-based) |
+| `%rankforge_is_max_rank%` | `false` | `true` if player is at the final rank |
+| `%rankforge_next_rank%` | `Elite` | Next rank ID, or `MAX` |
+| `%rankforge_next_cost%` | `$100,000` | Next rank's money requirement |
+| `%rankforge_cost%` | `$10,000` | Current rank's money requirement |
+| `%rankforge_progress%` | `62.5` | Overall requirement progress (decimal) |
+| `%rankforge_progress_percent%` | `62.5%` | Same with `%` appended |
+| `%rankforge_progress_bar%` | `██████░░░░` | Visual ASCII progress bar |
+| `%rankforge_required_progress%` | `$100,000 Lv75` | All requirements for the next rank |
+| `%rankforge_remaining_progress%` | `$37,500 Lv12` | What remains unmet |
+| `%rankforge_money%` | `$62,500` | Player's current Vault balance |
+| `%rankforge_has_money%` | `false` | `true` if player can afford the next rank |
+| `%rankforge_missing_money%` | `$37,500` | Money still needed |
+| `%rankforge_requirements_status%` | `§c✘ Requirements Unmet` | Met / unmet status label |
+| `%rankforge_requirements_detail%` | *(multiline)* | Full requirement breakdown |
+| `%rankforge_xp_level%` | `30` | Player's current Minecraft XP level |
+| `%rankforge_xp_progress%` | `73.2%` | Fraction to next XP level |
+| `%rankforge_player%` | `Steve` | Player's display name (Bedrock-safe) |
+| `%rankforge_uuid%` | `xxxxxxxx-...` | Player's UUID |
+| `%rankforge_lang%` | `en` | Player's active language code |
+| `%rankforge_version%` | `2.8` | Plugin version |
+
+---
+
+### ❓ FAQ / Troubleshooting
+
+**Rank not updating after `/rank up`**
+Run `/rank progress` to see which requirements are unmet. Confirm `next-rank` is set correctly on the current rank.
+
+**PlaceholderAPI not working**
+Ensure PlaceholderAPI is installed and loaded before RankForge. Run `/papi list` to confirm `rankforge` is registered. Use `/rank reload` after installing PAPI.
+
+**Vault not detected**
+Vault must be installed *and* an economy provider (e.g., EssentialsX) must also be present. Check startup log for `[SoftDep] Vault=✓`.
+
+**LuckPerms integration not applying permissions**
+LuckPerms must load before RankForge. Verify with `/rank version` that the plugin loaded successfully. Check that permission nodes in `ranks.yml` have no spaces or typos.
+
+**MySQL connection problems**
+Verify credentials in `config.yml`. Ensure the database user has `CREATE`, `ALTER`, and `INSERT` privileges. Check console for `[DB] Failed to create MySQL tables` and the specific SQL error. RankForge automatically falls back to YAML if MySQL is unreachable.
+
+**Playtime requirement not progressing**
+Check that `PlaytimeTracker` initialized on startup (look for errors in the console). Relog — the `PlayerJoinEvent` re-registers your session start. Confirm the rank's `playtime` value is greater than zero. Use `/rank requirements` to see the playtime line.
+
+**Old `playtime-minutes` config stopped working**
+It has not stopped working. The key is fully supported. Add `playtime: 1hr` to new ranks going forward; existing `playtime-minutes` entries require no changes.
+
+**Invalid playtime format error**
+Ensure the value uses only the supported units (`d`, `hr`, `m`, `s`) with whole numbers and no special characters. Valid: `1d 12hr 30m`. Invalid: `1.5d`, `2hours`, `90`.
+
+**Configuration mistakes**
+Use a YAML validator (e.g., [yaml-online-parser.appspot.com](https://yaml-online-parser.appspot.com/)) to check `ranks.yml` for syntax errors. All invalid ranks are logged and skipped — look for `[YamlLoader] Skipped rank` warnings in the console.
+
+---
+
+### 💡 Best Practices
+
+#### Organizing rank chains
+
+- Keep rank IDs simple and consistent (`Guest`, `Member`, `Veteran`) — they are stored in player data.
+- Always set `next-rank` for every non-final rank to avoid silent dead-ends.
+- Use the `slot` field to arrange ranks visually in the GUI from left to right.
+
+#### Optimizing performance
+
+- Use YAML storage for single servers; MySQL for networks with many concurrent players.
+- Keep `sync.interval-ticks` at `200` (10 seconds) or higher to reduce disk I/O.
+- Disable cosmetics you don't use (`particles`, `bossbar`) to reduce per-player overhead on busy servers.
+- The TPS-aware performance system automatically suppresses heavy effects when the server is under load.
+
+#### Creating balanced progression
+
+- Start playtime requirements low (30m–1hr for the first rank) and increase gradually.
+- Combine `playtime` with activity-based requirements (`block-breaks`, `mob-kills`) so idle AFK players don't auto-rank.
+- Test all requirements on yourself with `/rank set <yourself> <rank>` and `/rank progress` before opening to players.
+
+#### Maintaining configuration files
+
+- Always use `/rank reload` — never `/reload`.
+- Back up `ranks.yml` and `playerdata.yml` (or your MySQL database) before making major changes.
+- When renaming a rank ID, update `default-rank` and all `next-rank` references, then use `/rank reload`. Players with the old ID are automatically repaired to `default-rank`.
+- Use the in-game admin editor (`/rank editor`) for safe edits that automatically validate and save the file.
+
+---
+
 <div align="center">
 
 **Made with ❤️ by [JoshuaOP](https://github.com/JoshuaOP)**

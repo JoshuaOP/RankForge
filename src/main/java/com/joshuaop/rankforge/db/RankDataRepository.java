@@ -23,7 +23,8 @@ public class RankDataRepository {
     }
 
     public PlayerData load(UUID uuid, String playerName) {
-        if (cache.contains(uuid)) return cache.get(uuid);
+        PlayerData cached = cache.get(uuid);
+        if (cached != null) return cached;
 
         if (db.isConnected()) {
             return loadFromMySQL(uuid, playerName);
@@ -137,11 +138,17 @@ public class RankDataRepository {
         // block_breaks and playtime_minutes may be absent in older databases before migration runs.
         long blockBreaks = 0L;
         try { blockBreaks = rs.getLong("block_breaks"); }
-        catch (SQLException ignored) {}
+        catch (SQLException e) {
+            if (plugin.isDebug())
+                plugin.getLogger().warning("[DB] Could not read block_breaks column: " + e.getMessage());
+        }
 
         long playtimeMinutes = 0L;
         try { playtimeMinutes = rs.getLong("playtime_minutes"); }
-        catch (SQLException ignored) {}
+        catch (SQLException e) {
+            if (plugin.isDebug())
+                plugin.getLogger().warning("[DB] Could not read playtime_minutes column: " + e.getMessage());
+        }
 
         return new PlayerData(
                 UUID.fromString(rs.getString("uuid")),

@@ -4,6 +4,8 @@ import com.joshuaop.rankforge.rank.RankModel;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 
+import com.joshuaop.rankforge.util.FormatUtil;
+
 import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -67,7 +69,7 @@ public class YamlLoader {
                 .requiredMoney(req           != null ? req.getDouble("money",            0)   : 0)
                 .requiredXpLevel(req         != null ? req.getInt("xp-level",            0)   : 0)
                 .requiredPermission(req      != null ? req.getString("permission",        "") : "")
-                .requiredPlaytimeMinutes(req != null ? req.getLong("playtime-minutes",    0)   : 0)
+                .requiredPlaytimeMinutes(parsePlaytimeToMinutes(id, req))
                 .requiredMobKills(req        != null ? req.getInt("mob-kills",            0)   : 0)
                 // ── New requirements ─────────────────────────────────────────
                 .requiredBlockBreaks(req     != null ? req.getInt("block-breaks",         0)   : 0)
@@ -77,6 +79,49 @@ public class YamlLoader {
                 .requiredWorlds(req          != null ? req.getStringList("worlds")              : java.util.Collections.emptyList())
                 .requiredItems(parseItems(req))
                 .build();
+    }
+
+    /**
+     * Resolves the playtime requirement for a rank.
+     *
+     * <p>Priority:
+     * <ol>
+     *   <li>New unified key: {@code playtime: "5d 5hr 5m 5s"}</li>
+     *   <li>Legacy key (backward-compatible): {@code playtime-minutes: 60}</li>
+     * </ol>
+     *
+     * <p>Supported units (case-insensitive): {@code d} days, {@code hr} hours,
+     * {@code m} minutes, {@code s} seconds (truncated to whole minutes).
+     * Negative values are rejected and default to {@code 0}.
+     */
+    private long parsePlaytimeToMinutes(String rankId, ConfigurationSection req) {
+        if (req == null) return 0;
+
+        // ── New unified format: playtime: "5d 5hr 5m 5s" ─────────────────────
+        if (req.isSet("playtime")) {
+            String raw = req.getString("playtime", "").trim();
+            if (!raw.isEmpty()) {
+                try {
+                    long minutes = FormatUtil.parsePlaytimeString(raw);
+                    return minutes;
+                } catch (IllegalArgumentException e) {
+                    log.warning("[YamlLoader] Rank '" + rankId
+                            + "': invalid playtime value '" + raw
+                            + "' — " + e.getMessage() + ". Defaulting to 0.");
+                    return 0;
+                }
+            }
+        }
+
+        // ── Legacy backward-compatible key: playtime-minutes ──────────────────
+        long minutes = req.getLong("playtime-minutes", 0);
+        if (minutes < 0) {
+            log.warning("[YamlLoader] Rank '" + rankId
+                    + "': negative playtime-minutes value '" + minutes
+                    + "' — defaulting to 0.");
+            return 0;
+        }
+        return minutes;
     }
 
     private Map<String, Integer> parseItems(ConfigurationSection req) {
