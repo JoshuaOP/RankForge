@@ -25,7 +25,7 @@ public final class RankModel {
     private final double              requiredMoney;
     private final int                 requiredXpLevel;
     private final String              requiredPermission;
-    private final long                requiredPlaytimeMinutes;
+    private final long                requiredPlayTime;
     private final int                 requiredMobKills;
     private final int                 requiredBlockBreaks;
     private final String              requiredStatisticId;
@@ -47,7 +47,7 @@ public final class RankModel {
         this.requiredMoney           = b.requiredMoney;
         this.requiredXpLevel         = b.requiredXpLevel;
         this.requiredPermission      = b.requiredPermission != null ? b.requiredPermission : "";
-        this.requiredPlaytimeMinutes = b.requiredPlaytimeMinutes;
+        this.requiredPlayTime = b.requiredPlayTime;
         this.requiredMobKills        = b.requiredMobKills;
         this.requiredBlockBreaks     = b.requiredBlockBreaks;
         this.requiredStatisticId     = b.requiredStatisticId != null ? b.requiredStatisticId : "";
@@ -71,7 +71,7 @@ public final class RankModel {
     public double              getRequiredMoney()            { return requiredMoney; }
     public int                 getRequiredXpLevel()          { return requiredXpLevel; }
     public String              getRequiredPermission()       { return requiredPermission; }
-    public long                getRequiredPlaytimeMinutes()  { return requiredPlaytimeMinutes; }
+    public long                getRequiredPlayTime()          { return requiredPlayTime; }
     public int                 getRequiredMobKills()         { return requiredMobKills; }
     public int                 getRequiredBlockBreaks()      { return requiredBlockBreaks; }
     public String              getRequiredStatisticId()      { return requiredStatisticId; }
@@ -89,7 +89,7 @@ public final class RankModel {
     public RankModel withRequiredMoney(double v)                 { return new Builder(this).requiredMoney(v).build(); }
     public RankModel withRequiredXpLevel(int v)                  { return new Builder(this).requiredXpLevel(v).build(); }
     public RankModel withRequiredPermission(String v)            { return new Builder(this).requiredPermission(v).build(); }
-    public RankModel withRequiredPlaytimeMinutes(long v)         { return new Builder(this).requiredPlaytimeMinutes(v).build(); }
+    public RankModel withRequiredPlayTime(long v)                { return new Builder(this).requiredPlayTime(v).build(); }
     public RankModel withRequiredMobKills(int v)                 { return new Builder(this).requiredMobKills(v).build(); }
     public RankModel withRequiredBlockBreaks(int v)              { return new Builder(this).requiredBlockBreaks(v).build(); }
     public RankModel withRequiredStatistic(String id, int value) { return new Builder(this).requiredStatisticId(id).requiredStatisticValue(value).build(); }
@@ -119,7 +119,7 @@ public final class RankModel {
         private double              requiredMoney           = 0;
         private int                 requiredXpLevel         = 0;
         private String              requiredPermission      = "";
-        private long                requiredPlaytimeMinutes = 0;
+        private long                requiredPlayTime = 0;
         private int                 requiredMobKills        = 0;
         private int                 requiredBlockBreaks     = 0;
         private String              requiredStatisticId     = "";
@@ -146,7 +146,7 @@ public final class RankModel {
                 this.requiredMoney           = src.requiredMoney;
                 this.requiredXpLevel         = src.requiredXpLevel;
                 this.requiredPermission      = src.requiredPermission;
-                this.requiredPlaytimeMinutes = src.requiredPlaytimeMinutes;
+                this.requiredPlayTime = src.requiredPlayTime;
                 this.requiredMobKills        = src.requiredMobKills;
                 this.requiredBlockBreaks     = src.requiredBlockBreaks;
                 this.requiredStatisticId     = src.requiredStatisticId;
@@ -168,7 +168,7 @@ public final class RankModel {
         public Builder requiredMoney(double v)                { this.requiredMoney = v;                            return this; }
         public Builder requiredXpLevel(int v)                 { this.requiredXpLevel = v;                         return this; }
         public Builder requiredPermission(String v)           { this.requiredPermission = v != null ? v : "";      return this; }
-        public Builder requiredPlaytimeMinutes(long v)        { this.requiredPlaytimeMinutes = v;                 return this; }
+        public Builder requiredPlayTime(long v)               { this.requiredPlayTime = v;                       return this; }
         public Builder requiredMobKills(int v)                { this.requiredMobKills = v;                        return this; }
         public Builder requiredBlockBreaks(int v)             { this.requiredBlockBreaks = v;                     return this; }
         public Builder requiredStatisticId(String v)          { this.requiredStatisticId = v != null ? v : "";     return this; }

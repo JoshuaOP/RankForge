@@ -95,7 +95,7 @@ public class RankDataRepository {
             ps.setDouble(5, data.money());
             ps.setString(6, data.language());
             ps.setLong(7,   data.blockBreaks());
-            ps.setLong(8,   data.playtimeMinutes());
+            ps.setLong(8,   data.playTime());
             ps.executeUpdate();
         } catch (SQLException e) {
             plugin.getLogger().warning("[DB] MySQL save failed for " + data.uuid() + ": " + e.getMessage());
@@ -143,8 +143,8 @@ public class RankDataRepository {
                 plugin.getLogger().warning("[DB] Could not read block_breaks column: " + e.getMessage());
         }
 
-        long playtimeMinutes = 0L;
-        try { playtimeMinutes = rs.getLong("playtime_minutes"); }
+        long playTime = 0L;
+        try { playTime = rs.getLong("playtime_minutes"); }
         catch (SQLException e) {
             if (plugin.isDebug())
                 plugin.getLogger().warning("[DB] Could not read playtime_minutes column: " + e.getMessage());
@@ -158,7 +158,7 @@ public class RankDataRepository {
                 rs.getDouble("money"),
                 rs.getString("language"),
                 blockBreaks,
-                playtimeMinutes
+                playTime
         );
     }
 }

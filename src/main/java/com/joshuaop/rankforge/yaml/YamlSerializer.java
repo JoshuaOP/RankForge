@@ -41,8 +41,8 @@ public class YamlSerializer {
         cfg.set(b + ".requirements.permission", r.getRequiredPermission());
 
         // ── Optional requirements (only written when non-default) ─────────────
-        if (r.getRequiredPlaytimeMinutes() > 0)
-            cfg.set(b + ".requirements.playtime", minutesToPlaytimeString(r.getRequiredPlaytimeMinutes()));
+        if (r.getRequiredPlayTime() > 0)
+            cfg.set(b + ".requirements.playtime", minutesToPlaytimeString(r.getRequiredPlayTime()));
 
         if (r.getRequiredMobKills() > 0)
             cfg.set(b + ".requirements.mob-kills",         r.getRequiredMobKills());

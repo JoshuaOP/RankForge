@@ -108,7 +108,7 @@ public class RequirementManager {
      * counts server ticks (affected by TPS) rather than wall-clock seconds.
      */
     private void checkPlaytime(Player player, RankModel rank, List<String> unmet) {
-        long requiredMinutes = rank.getRequiredPlaytimeMinutes();
+        long requiredMinutes = rank.getRequiredPlayTime();
         if (requiredMinutes <= 0) return;
 
         if (plugin.getPlaytimeTracker() == null) {
@@ -117,7 +117,7 @@ public class RequirementManager {
             return;
         }
 
-        long minutesPlayed = plugin.getPlaytimeTracker().getPlaytimeMinutes(player.getUniqueId());
+        long minutesPlayed = plugin.getPlaytimeTracker().getPlayTime(player.getUniqueId());
         if (minutesPlayed < requiredMinutes)
             unmet.add("§7Playtime: §c" + FormatUtil.formatTime(requiredMinutes)
                     + " §8(have " + FormatUtil.formatTime(minutesPlayed) + ")");

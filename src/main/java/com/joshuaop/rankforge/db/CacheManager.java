@@ -167,9 +167,9 @@ public class CacheManager {
         }
 
         // ── Live playtime from PlaytimeTracker (wall-clock, not ticks) ────────
-        long livePlaytime = data.playtimeMinutes();
+        long livePlaytime = data.playTime();
         if (plugin.getPlaytimeTracker() != null) {
-            livePlaytime = plugin.getPlaytimeTracker().getPlaytimeMinutes(player.getUniqueId());
+            livePlaytime = plugin.getPlaytimeTracker().getPlayTime(player.getUniqueId());
         }
 
         return new PlayerData(

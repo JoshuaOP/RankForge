@@ -146,11 +146,11 @@ public class ProgressService {
     }
 
     private void addPlaytime(Player player, RankModel next, List<RequirementProgress> out) {
-        long requiredMin = next.getRequiredPlaytimeMinutes();
+        long requiredMin = next.getRequiredPlayTime();
         if (requiredMin <= 0) return;
         long haveMin = 0L;
         if (plugin.getPlaytimeTracker() != null) {
-            haveMin = plugin.getPlaytimeTracker().getPlaytimeMinutes(player.getUniqueId());
+            haveMin = plugin.getPlaytimeTracker().getPlayTime(player.getUniqueId());
         }
         double pct = Math.min(100.0, ((double) haveMin / requiredMin) * 100.0);
         out.add(new RequirementProgress("Playtime",

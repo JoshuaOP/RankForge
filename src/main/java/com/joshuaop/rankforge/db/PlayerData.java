@@ -15,7 +15,7 @@ import java.util.UUID;
  *   language         — per-player language code (e.g. "en", "de")
  *   blockBreaks      — cumulative blocks broken tracked by BlockBreakTracker;
  *                      replaces vanilla MINE_BLOCK stat approximation entirely
- *   playtimeMinutes  — cumulative real-world playtime in whole minutes, tracked by
+ *   playTime         — cumulative real-world playtime in whole minutes, tracked by
  *                      PlaytimeTracker using wall-clock time (not Minecraft ticks).
  *                      Immune to TPS fluctuations and server lag.
  */
@@ -27,7 +27,7 @@ public record PlayerData(
         double money,
         String language,
         long   blockBreaks,
-        long   playtimeMinutes
+        long   playTime
 ) {
 
     /** Create default PlayerData for a brand-new player. */
@@ -39,36 +39,36 @@ public record PlayerData(
 
     public PlayerData withRank(String newRankId) {
         return new PlayerData(uuid, playerName, newRankId, experience, money, language,
-                blockBreaks, playtimeMinutes);
+                blockBreaks, playTime);
     }
 
     public PlayerData withLanguage(String newLang) {
         return new PlayerData(uuid, playerName, rankId, experience, money, newLang,
-                blockBreaks, playtimeMinutes);
+                blockBreaks, playTime);
     }
 
     public PlayerData withMoney(double newMoney) {
         return new PlayerData(uuid, playerName, rankId, experience, newMoney, language,
-                blockBreaks, playtimeMinutes);
+                blockBreaks, playTime);
     }
 
     public PlayerData withExperience(long newExp) {
         return new PlayerData(uuid, playerName, rankId, newExp, money, language,
-                blockBreaks, playtimeMinutes);
+                blockBreaks, playTime);
     }
 
     public PlayerData withPlayerName(String newPlayerName) {
         return new PlayerData(uuid, newPlayerName, rankId, experience, money, language,
-                blockBreaks, playtimeMinutes);
+                blockBreaks, playTime);
     }
 
     public PlayerData withBlockBreaks(long newBlockBreaks) {
         return new PlayerData(uuid, playerName, rankId, experience, money, language,
-                Math.max(0L, newBlockBreaks), playtimeMinutes);
+                Math.max(0L, newBlockBreaks), playTime);
     }
 
-    public PlayerData withPlaytimeMinutes(long newPlaytimeMinutes) {
+    public PlayerData withPlayTime(long newPlayTime) {
         return new PlayerData(uuid, playerName, rankId, experience, money, language,
-                blockBreaks, Math.max(0L, newPlaytimeMinutes));
+                blockBreaks, Math.max(0L, newPlayTime));
     }
 }

@@ -41,7 +41,7 @@ public class RankDetailEditorGUI {
         EDITABLE_FIELDS.put(23, new String[]{"permission",        "§bEnter required permission §7(or 'none'):"});
         EDITABLE_FIELDS.put(25, new String[]{"chatPrefix",        "§bEnter chat prefix §7(supports & colors, or 'none'):"});
         // Row 4 — extended requirements
-        EDITABLE_FIELDS.put(28, new String[]{"playtimeMinutes",   "§bEnter required playtime §7(e.g. §e30m§7, §e2hr§7, §e1d 12hr§7, §e5d 5hr 5m§7, or §e0m §7for none):"});
+        EDITABLE_FIELDS.put(28, new String[]{"playTime",          "§bEnter required playtime §7(e.g. §e30m§7, §e2hr§7, §e1d 12hr§7, §e5d 5hr 5m§7, or §e0m §7for none):"});
         EDITABLE_FIELDS.put(30, new String[]{"mobKills",          "§bEnter required mob kills §7(e.g. 100, or 0 for none):"});
         EDITABLE_FIELDS.put(32, new String[]{"blockBreaks",       "§bEnter required block breaks §7(e.g. 500, or 0 for none):"});
         EDITABLE_FIELDS.put(34, new String[]{"statistic",
@@ -132,7 +132,7 @@ public class RankDetailEditorGUI {
 
         // ── Row 4: Extended requirements ──────────────────────────────────────
         inv.setItem(28, prop(Material.CLOCK, "§b§lRequired Playtime",
-                List.of("§f" + (r.getRequiredPlaytimeMinutes() > 0 ? FormatUtil.formatTime(r.getRequiredPlaytimeMinutes()) : "§8None"),
+                List.of("§f" + (r.getRequiredPlayTime() > 0 ? FormatUtil.formatTime(r.getRequiredPlayTime()) : "§8None"),
                         "", "§a▶ Click to edit §7(e.g. 30m, 2hr, 1d 12hr)")));
         inv.setItem(30, prop(Material.BONE, "§4§lRequired Mob Kills",
                 List.of("§f" + (r.getRequiredMobKills() > 0 ? r.getRequiredMobKills() + " kills" : "§8None"),
@@ -414,9 +414,9 @@ public class RankDetailEditorGUI {
             }
             case "permission"  -> rank.withRequiredPermission(raw.equalsIgnoreCase("none") ? "" : raw.trim());
             case "chatPrefix"  -> rank.withChatPrefix(raw.equalsIgnoreCase("none") ? "" : val.trim());
-            case "playtimeMinutes" -> {
+            case "playTime" -> {
                 long v = FormatUtil.parsePlaytimeString(raw.trim());
-                yield rank.withRequiredPlaytimeMinutes(v);
+                yield rank.withRequiredPlayTime(v);
             }
             case "mobKills"    -> {
                 try {

@@ -78,7 +78,7 @@ public class AdminRankEditorGUI {
 
         boolean hasReqs = r.getRequiredMoney() > 0 || r.getRequiredXpLevel() > 0
                 || (r.getRequiredPermission() != null && !r.getRequiredPermission().isBlank())
-                || r.getRequiredPlaytimeMinutes() > 0 || r.getRequiredMobKills() > 0
+                || r.getRequiredPlayTime() > 0 || r.getRequiredMobKills() > 0
                 || r.getRequiredBlockBreaks() > 0
                 || (r.getRequiredStatisticId() != null && !r.getRequiredStatisticId().isBlank())
                 || !r.getRequiredQuests().isEmpty() || !r.getRequiredWorlds().isEmpty()
@@ -93,8 +93,8 @@ public class AdminRankEditorGUI {
                 lore.add("  §8• §7XP Level:     §aLevel " + r.getRequiredXpLevel());
             if (r.getRequiredPermission() != null && !r.getRequiredPermission().isBlank())
                 lore.add("  §8• §7Permission:   §a" + r.getRequiredPermission());
-            if (r.getRequiredPlaytimeMinutes() > 0)
-                lore.add("  §8• §7Playtime:     §a" + FormatUtil.formatTime(r.getRequiredPlaytimeMinutes()));
+            if (r.getRequiredPlayTime() > 0)
+                lore.add("  §8• §7Playtime:     §a" + FormatUtil.formatTime(r.getRequiredPlayTime()));
             if (r.getRequiredMobKills() > 0)
                 lore.add("  §8• §7Mob Kills:    §a" + String.format("%,d", r.getRequiredMobKills()));
             if (r.getRequiredBlockBreaks() > 0)

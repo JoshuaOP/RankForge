@@ -188,7 +188,7 @@ public class YamlPlayerDataStorage {
         yaml.set(path + ".money",            data.money());
         yaml.set(path + ".language",         data.language());
         yaml.set(path + ".block-breaks",     data.blockBreaks());
-        yaml.set(path + ".playtime-minutes", data.playtimeMinutes());
+        yaml.set(path + ".playtime-minutes", data.playTime());
     }
 
     private PlayerData fromSection(UUID uuid, ConfigurationSection s) {
@@ -236,8 +236,8 @@ public class YamlPlayerDataStorage {
                 : data.blockBreaks();
 
         long livePlaytime = plugin.getPlaytimeTracker() != null
-                ? plugin.getPlaytimeTracker().getPlaytimeMinutes(player.getUniqueId())
-                : data.playtimeMinutes();
+                ? plugin.getPlaytimeTracker().getPlayTime(player.getUniqueId())
+                : data.playTime();
 
         return new PlayerData(
                 data.uuid(), player.getName(), data.rankId(),

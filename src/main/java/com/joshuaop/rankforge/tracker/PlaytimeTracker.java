@@ -22,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *       or Minecraft tick rate. Accurate even during lag spikes, TPS drops, or GC pauses.</li>
  *   <li>On JOIN the persisted lifetime total from {@link PlayerData} is loaded as the
  *       session base. The current wall-clock time is recorded as the session start.</li>
- *   <li>{@link #getPlaytimeMinutes(UUID)} always returns baseMinutes + elapsed since join,
+ *   <li>{@link #getPlayTime(UUID)} always returns baseMinutes + elapsed since join,
  *       giving a live, accurate value without requiring a flush.</li>
  *   <li>On QUIT the final total is flushed to the {@link com.joshuaop.rankforge.db.CacheManager}
  *       so the normal sync/save pipeline persists it correctly.</li>
@@ -31,13 +31,13 @@ import java.util.concurrent.ConcurrentHashMap;
  * </ul>
  *
  * <h3>Storage</h3>
- * Playtime is stored as cumulative minutes (long) in {@link PlayerData#playtimeMinutes()}.
+ * Playtime is stored as cumulative minutes (long) in {@link PlayerData#playTime()}.
  * Both YAML and MySQL backends persist and restore this value across restarts.
  * Sub-minute precision is intentionally discarded at flush time — sessions shorter than
  * 60 seconds do not award a minute of playtime, preventing inflated counts.
  *
  * <h3>Migration</h3>
- * Existing data has {@code playtimeMinutes = 0}. On first join after the update the
+ * Existing data has {@code playTime = 0}. On first join after the update the
  * tracker initialises from the stored value (zero) and begins accumulating from that
  * point. No conversion of the old vanilla {@code PLAY_ONE_MINUTE} statistic is needed
  * because the stat itself was inaccurate (tick-based) and would compound the existing error.
@@ -90,7 +90,7 @@ public class PlaytimeTracker implements Listener {
      *   <li>Offline — value stored in {@link PlayerData} via cache or storage.</li>
      * </ul>
      */
-    public long getPlaytimeMinutes(UUID uuid) {
+    public long getPlayTime(UUID uuid) {
         Long start = sessionStart.get(uuid);
         Long base  = sessionBase.get(uuid);
         if (start != null && base != null) {
@@ -100,7 +100,7 @@ public class PlaytimeTracker implements Listener {
         // Offline player — read from cache/storage
         if (plugin.getRankManager() != null) {
             PlayerData data = plugin.getRankManager().getCacheManager().getRaw(uuid);
-            if (data != null) return data.playtimeMinutes();
+            if (data != null) return data.playTime();
         }
         return 0L;
     }
@@ -109,7 +109,7 @@ public class PlaytimeTracker implements Listener {
      * Forcefully set the lifetime playtime for a player (admin override / correction).
      * Also flushes the new value into the cache immediately.
      */
-    public void setPlaytimeMinutes(UUID uuid, long minutes) {
+    public void setPlayTime(UUID uuid, long minutes) {
         long clamped = Math.max(0L, minutes);
         sessionBase.put(uuid, clamped);
         if (sessionStart.containsKey(uuid)) {
@@ -136,9 +136,9 @@ public class PlaytimeTracker implements Listener {
         long elapsedMinutes = (System.currentTimeMillis() - start) / 60_000L;
         long newTotal = base + elapsedMinutes;
 
-        if (current.playtimeMinutes() == newTotal) return; // nothing changed
+        if (current.playTime() == newTotal) return; // nothing changed
 
-        cacheManager.put(uuid, current.withPlaytimeMinutes(newTotal));
+        cacheManager.put(uuid, current.withPlayTime(newTotal));
     }
 
     /**
@@ -170,9 +170,9 @@ public class PlaytimeTracker implements Listener {
         if (plugin.getRankManager() == null) return 0L;
 
         PlayerData cached = plugin.getRankManager().getCacheManager().getRaw(uuid);
-        if (cached != null) return cached.playtimeMinutes();
+        if (cached != null) return cached.playTime();
 
         PlayerData loaded = plugin.getRankManager().getRepository().load(uuid, playerName);
-        return loaded != null ? loaded.playtimeMinutes() : 0L;
+        return loaded != null ? loaded.playTime() : 0L;
     }
 }

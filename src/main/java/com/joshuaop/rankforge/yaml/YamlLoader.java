@@ -69,7 +69,7 @@ public class YamlLoader {
                 .requiredMoney(req           != null ? req.getDouble("money",            0)   : 0)
                 .requiredXpLevel(req         != null ? req.getInt("xp-level",            0)   : 0)
                 .requiredPermission(req      != null ? req.getString("permission",        "") : "")
-                .requiredPlaytimeMinutes(parsePlaytimeToMinutes(id, req))
+                .requiredPlayTime(parsePlaytimeToMinutes(id, req))
                 .requiredMobKills(req        != null ? req.getInt("mob-kills",            0)   : 0)
                 // ── New requirements ─────────────────────────────────────────
                 .requiredBlockBreaks(req     != null ? req.getInt("block-breaks",         0)   : 0)

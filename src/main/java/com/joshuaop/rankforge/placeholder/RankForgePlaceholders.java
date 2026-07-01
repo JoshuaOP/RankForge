@@ -134,7 +134,7 @@ public class RankForgePlaceholders extends PlaceholderExpansion {
         if (next.getRequiredXpLevel() > 0) sb.append("Lv").append(next.getRequiredXpLevel()).append(" ");
         if (next.getRequiredBlockBreaks() > 0) sb.append(next.getRequiredBlockBreaks()).append(" blocks ");
         if (next.getRequiredMobKills() > 0) sb.append(next.getRequiredMobKills()).append(" kills ");
-        if (next.getRequiredPlaytimeMinutes() > 0) sb.append(FormatUtil.formatTime(next.getRequiredPlaytimeMinutes())).append(" ");
+        if (next.getRequiredPlayTime() > 0) sb.append(FormatUtil.formatTime(next.getRequiredPlayTime())).append(" ");
         String result = sb.toString().trim();
         return result.isEmpty() ? "§7None" : result;
     }
