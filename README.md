@@ -380,7 +380,7 @@ ranks:
     required-money: 0
     required-xp-level: 0
     required-permission: ""
-    required-playtime-minutes: 0
+    required-playtime: 0
     required-mob-kills: 0
     required-block-breaks: 0
     required-statistic-id: ""
@@ -408,7 +408,7 @@ ranks:
       - "lp user %player% group set member"
     required-money: 1000
     required-xp-level: 10
-    required-playtime-minutes: 60
+    required-playtime: 60
     required-mob-kills: 0
     required-block-breaks: 0
     required-items: {}
@@ -430,7 +430,7 @@ ranks:
       - "give %player% GOLDEN_APPLE 5"
     required-money: 10000
     required-xp-level: 30
-    required-playtime-minutes: 600
+    required-playtime: 600
     required-mob-kills: 100
     required-block-breaks: 5000
     required-items:
@@ -453,7 +453,7 @@ ranks:
       - "lp user %player% group set elite"
     required-money: 100000
     required-xp-level: 75
-    required-playtime-minutes: 3000
+    required-playtime: 3000
     required-mob-kills: 1000
     required-block-breaks: 50000
     required-statistic-id: "FISH_CAUGHT"
@@ -483,7 +483,7 @@ ranks:
 | `required-money` | Double | Vault balance required. `0` = no requirement. |
 | `required-xp-level` | Integer | Vanilla XP level required. |
 | `required-permission` | String | A single permission node required to rank up. |
-| `required-playtime-minutes` | Long | Total server playtime required (minutes). |
+| `required-playtime` | Long | Total server playtime required (minutes). |
 | `required-mob-kills` | Integer | Total mob kills required (`MOB_KILLS` statistic). |
 | `required-block-breaks` | Integer | Exact block breaks tracked by RankForge's counter. |
 | `required-statistic-id` | String | Any untyped `Bukkit.Statistic` enum name. |
@@ -746,7 +746,7 @@ Only one permission can be specified per rank using this built-in field. For mul
 Requires a minimum number of minutes of server playtime. Tracked via the vanilla `PLAY_ONE_MINUTE` statistic (1 minute = 1 200 ticks).
 
 ```yaml
-required-playtime-minutes: 300    # 5 hours
+required-playtime: 300    # 5 hours
 ```
 
 > [!NOTE]
@@ -1610,7 +1610,7 @@ ranks:
     commands: []
     required-money: 0
     required-xp-level: 0
-    required-playtime-minutes: 0
+    required-playtime: 0
     required-mob-kills: 0
     required-block-breaks: 0
     required-items: {}
@@ -1633,7 +1633,7 @@ ranks:
       - "eco take %player% 500"
     required-money: 500
     required-xp-level: 5
-    required-playtime-minutes: 60
+    required-playtime: 60
     required-mob-kills: 0
     required-block-breaks: 0
     required-items: {}
@@ -1654,7 +1654,7 @@ ranks:
       - "give %player% GOLDEN_APPLE 3"
     required-money: 10000
     required-xp-level: 30
-    required-playtime-minutes: 600
+    required-playtime: 600
     required-mob-kills: 200
     required-block-breaks: 10000
     required-items:
@@ -1675,7 +1675,7 @@ ranks:
       - "eco take %player% 50000"
     required-money: 50000
     required-xp-level: 60
-    required-playtime-minutes: 3000
+    required-playtime: 3000
     required-mob-kills: 1000
     required-block-breaks: 100000
     required-items:
@@ -1699,7 +1699,7 @@ ranks:
       - "broadcast &6✦ %player% &rhas become a LEGEND! &6✦"
     required-money: 200000
     required-xp-level: 100
-    required-playtime-minutes: 10000
+    required-playtime: 10000
     required-mob-kills: 5000
     required-block-breaks: 500000
     required-items:
@@ -1732,7 +1732,7 @@ ranks:
     commands: []
     required-money: 0
     required-xp-level: 0
-    required-playtime-minutes: 0
+    required-playtime: 0
     required-mob-kills: 0
     required-block-breaks: 0
     required-items: {}
@@ -1750,7 +1750,7 @@ ranks:
       - "eco take %player% 5000"
     required-money: 5000
     required-xp-level: 0
-    required-playtime-minutes: 0
+    required-playtime: 0
     required-mob-kills: 0
     required-block-breaks: 500
     required-items: {}
@@ -1772,7 +1772,7 @@ ranks:
       - "broadcast &6%player% has earned their FREEDOM from prison!"
     required-money: 10000000
     required-xp-level: 0
-    required-playtime-minutes: 0
+    required-playtime: 0
     required-mob-kills: 0
     required-block-breaks: 1000000
     required-items: {}
@@ -2026,22 +2026,22 @@ playtime = (currentTimeMillis - joinTimeMillis) / 60_000   ← real wall-clock t
 - A server reboot or GC pause would skew the tick counter permanently.
 - `PlaytimeTracker` is immune to all of this — if a player is online for 60 real minutes, they earn exactly 60 minutes.
 
-### Configuring `playtime-minutes`
+### Configuring `playtime`
 
-The configuration key is **unchanged** from previous versions. Set `playtime-minutes` inside a rank's `requirements` block:
+The configuration key is **unchanged** from previous versions. Set `playtime` inside a rank's `requirements` block:
 
 ```yaml
 ranks:
   Member:
     requirements:
-      playtime-minutes: 60    # 60 real minutes of server playtime
+      playtime: 60    # 60 real minutes of server playtime
 ```
 
 ```yaml
 ranks:
   Veteran:
     requirements:
-      playtime-minutes: 600   # 10 real hours
+      playtime: 600   # 10 real hours
 ```
 
 The value is always in **whole minutes**. Sub-minute precision (seconds) is intentionally discarded when saving — sessions shorter than 60 seconds do not count as a full minute.
@@ -2053,15 +2053,15 @@ The value is always in **whole minutes**. Sub-minute precision (seconds) is inte
 ranks:
   Newcomer:
     requirements:
-      playtime-minutes: 0     # No playtime required
+      playtime: 0     # No playtime required
 
   Member:
     requirements:
-      playtime-minutes: 30    # 30 real minutes
+      playtime: 30    # 30 real minutes
 
   Regular:
     requirements:
-      playtime-minutes: 300   # 5 real hours
+      playtime: 300   # 5 real hours
 ```
 
 **Survival / vanilla server:**
@@ -2069,15 +2069,15 @@ ranks:
 ranks:
   Settler:
     requirements:
-      playtime-minutes: 60    # 1 real hour
+      playtime: 60    # 1 real hour
 
   Veteran:
     requirements:
-      playtime-minutes: 1200  # 20 real hours
+      playtime: 1200  # 20 real hours
 
   Elder:
     requirements:
-      playtime-minutes: 6000  # 100 real hours
+      playtime: 6000  # 100 real hours
 ```
 
 **Prison server — combined with block-breaks:**
@@ -2085,20 +2085,20 @@ ranks:
 ranks:
   B:
     requirements:
-      playtime-minutes: 60
+      playtime: 60
       block-breaks: 5000
 
   C:
     requirements:
-      playtime-minutes: 180
+      playtime: 180
       block-breaks: 25000
 ```
 
 ### Migration from v2.7
 
-No configuration changes are required. The `playtime-minutes` key in `ranks.yml` is identical. When upgrading:
+No configuration changes are required. The `playtime` key in `ranks.yml` is identical. When upgrading:
 
-1. RankForge automatically migrates the YAML playerdata schema from v3 → v4, adding `playtime-minutes: 0` to all existing records.
+1. RankForge automatically migrates the YAML playerdata schema from v3 → v4, adding `playtime: 0` to all existing records.
 2. For MySQL, a `playtime_minutes` column is added automatically via `ALTER TABLE` on startup.
 3. All existing players start at `0` real minutes and accumulate from the point of upgrade onward.
 
@@ -2276,7 +2276,7 @@ A: Currently, this must be done by editing `playerdata.yml` while the server is 
 **Q: My playtime requirement shows "0min" in `/rank progress` even though I've been online for an hour.**
 A: This can happen if the tracker didn't initialize on join (e.g., the plugin reloaded while you were online). Rejoin the server — the tracker will re-register your session start. If the issue persists, check console for errors.
 
-**Q: Does playtime-minutes in ranks.yml still work without changes?**
+**Q: Does playtime in ranks.yml still work without changes?**
 A: Yes. The configuration key is identical. No migration of `ranks.yml` is required — only the underlying implementation changed.
 
 ### Storage
@@ -2316,7 +2316,7 @@ A: Start the server with MySQL configured. RankForge will create the tables. The
 
 1. Check startup log — PlaytimeTracker registers on load. If there are errors, address them.
 2. Relog: the join event re-registers your session start.
-3. Check if `/rank requirements` shows a playtime line. If absent, the rank has `playtime-minutes: 0` (no requirement).
+3. Check if `/rank requirements` shows a playtime line. If absent, the rank has `playtime: 0` (no requirement).
 
 ### Playtime not saving after restart
 
@@ -2617,14 +2617,14 @@ requirements:
 
 **Backward compatibility:**
 
-Existing configurations using `playtime-minutes` continue to work without any changes:
+Existing configurations using `playtime` continue to work without any changes:
 
 ```yaml
 requirements:
-  playtime-minutes: 60    # Still fully supported — equals "1hr"
+  playtime: 60    # Still fully supported — equals "1hr"
 ```
 
-The loader checks for `playtime` first; if absent, it falls back to `playtime-minutes`. No edits to existing `ranks.yml` files are required.
+The loader checks for `playtime` first; if absent, it falls back to `playtime`. No edits to existing `ranks.yml` files are required.
 
 **Full example rank using the new format:**
 
@@ -2775,8 +2775,8 @@ Verify credentials in `config.yml`. Ensure the database user has `CREATE`, `ALTE
 **Playtime requirement not progressing**
 Check that `PlaytimeTracker` initialized on startup (look for errors in the console). Relog — the `PlayerJoinEvent` re-registers your session start. Confirm the rank's `playtime` value is greater than zero. Use `/rank requirements` to see the playtime line.
 
-**Old `playtime-minutes` config stopped working**
-It has not stopped working. The key is fully supported. Add `playtime: 1hr` to new ranks going forward; existing `playtime-minutes` entries require no changes.
+**Old `playtime` config stopped working**
+It has not stopped working. The key is fully supported. Add `playtime: 1hr` to new ranks going forward; existing `playtime` entries require no changes.
 
 **Invalid playtime format error**
 Ensure the value uses only the supported units (`d`, `hr`, `m`, `s`) with whole numbers and no special characters. Valid: `1d 12hr 30m`. Invalid: `1.5d`, `2hours`, `90`.
