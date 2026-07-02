@@ -50,7 +50,7 @@ public class RankHistoryManager {
             try {
                 dataFile.createNewFile();
             } catch (IOException e) {
-                plugin.getLogger().warning("[History] Could not create rank-history.yml: "
+                plugin.getLogger().warning("Could not create rank-history.yml: "
                         + e.getMessage());
             }
         }
@@ -63,8 +63,8 @@ public class RankHistoryManager {
             ensureFileExists();
             this.cachedYaml = YamlConfiguration.loadConfiguration(dataFile);
         } catch (Exception e) {
-            plugin.getLogger().warning("[History] Failed to load rank-history.yml: "
-                    + e.getMessage() + " — using clean backup fallback instance.");
+            plugin.getLogger().warning("Failed to load rank-history.yml: "
+                    + e.getMessage() + " — using empty fallback.");
             this.cachedYaml = new YamlConfiguration();
         } finally {
             lock.unlock();
@@ -77,7 +77,7 @@ public class RankHistoryManager {
         try {
             cachedYaml.save(dataFile);
         } catch (IOException e) {
-            plugin.getLogger().warning("[History] Failed to save rank-history.yml: "
+            plugin.getLogger().warning("Failed to save rank-history.yml: "
                     + e.getMessage());
         } finally {
             lock.unlock();
@@ -93,7 +93,7 @@ public class RankHistoryManager {
         if (entry == null) return;
         if (!isValidEntry(entry)) {
             if (plugin.isDebug()) {
-                plugin.getLogger().warning("[History] Rejected invalid entry for "
+                plugin.getLogger().warning("Rejected invalid history entry for "
                         + entry.playerUuid() + ": from=" + entry.fromRankId()
                         + " to=" + entry.toRankId() + " type=" + entry.type());
             }
@@ -107,10 +107,6 @@ public class RankHistoryManager {
 
             // Duplicate check execution
             if (isDuplicate(entries, entry)) {
-                if (plugin.isDebug()) {
-                    plugin.getLogger().info("[History] Skipped duplicate entry for "
-                            + entry.playerUuid());
-                }
                 return;
             }
 
@@ -208,8 +204,6 @@ public class RankHistoryManager {
         for (Object obj : raw) {
             if (obj instanceof Map) {
                 validatedList.add((Map<?, ?>) obj);
-            } else if (plugin.isDebug()) {
-                plugin.getLogger().warning("[History] Stripped structural non-map artifact entry lines for: " + uuidStr);
             }
         }
         return validatedList;
@@ -236,10 +230,6 @@ public class RankHistoryManager {
             try {
                 type = RankHistoryEntry.ChangeType.valueOf(typeName.toUpperCase());
             } catch (IllegalArgumentException e) {
-                if (plugin.isDebug()) {
-                    plugin.getLogger().warning("[History] Unknown ChangeType '" + typeName
-                            + "' for " + uuid + " — skipping entry.");
-                }
                 return null;
             }
 
@@ -248,10 +238,6 @@ public class RankHistoryManager {
 
             return new RankHistoryEntry(uuid, name, fromRank, toRank, type, timestamp);
         } catch (Exception e) {
-            if (plugin.isDebug()) {
-                plugin.getLogger().warning("[History] Failed to parse entry for "
-                        + uuid + ": " + e.getMessage());
-            }
             return null;
         }
     }

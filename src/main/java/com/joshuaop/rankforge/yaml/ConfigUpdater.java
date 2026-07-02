@@ -81,10 +81,8 @@ public class ConfigUpdater {
         if (added > 0) {
             try {
                 current.save(serverFile);
-                plugin.getLogger().info("[ConfigUpdater] Updated " + resourcePath
-                        + " — injected " + added + " missing configuration value(s).");
             } catch (IOException e) {
-                plugin.getLogger().warning("[ConfigUpdater] Could not save updated "
+                plugin.getLogger().warning("Could not save updated config "
                         + resourcePath + ": " + e.getMessage());
             }
         }
@@ -126,7 +124,7 @@ public class ConfigUpdater {
             return YamlConfiguration.loadConfiguration(
                     new InputStreamReader(in, StandardCharsets.UTF_8));
         } catch (IOException e) {
-            plugin.getLogger().warning("[ConfigUpdater] Could not load bundled "
+            plugin.getLogger().warning("Could not load bundled config "
                     + resourcePath + ": " + e.getMessage());
             return null;
         }

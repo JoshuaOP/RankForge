@@ -163,9 +163,6 @@ public final class RankForge extends JavaPlugin {
         boolean mysqlOk       = databaseManager.connect();
         yamlPlayerDataStorage = new YamlPlayerDataStorage(this);
 
-        if (!mysqlOk && isDebug()) {
-            getLogger().info("[DB] Defaulting to fallback local storage tracking.");
-        }
     }
 
     private void initYaml() {
@@ -232,7 +229,7 @@ public final class RankForge extends JavaPlugin {
             new Metrics(this, BSTATS_PLUGIN_ID);
         } catch (Exception e) {
             if (isDebug()) {
-                getLogger().warning("[Metrics] bStats failed to initialize: " + e.getMessage());
+                getLogger().warning("bStats failed to initialize: " + e.getMessage());
             }
         }
     }

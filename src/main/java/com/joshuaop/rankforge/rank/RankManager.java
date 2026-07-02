@@ -42,7 +42,7 @@ public class RankManager {
             }
             
             if (plugin.isDebug()) {
-                plugin.getLogger().info("[Ranks] Indexed " + this.ranks.size() + " ranks.");
+                plugin.getLogger().info("Indexed " + this.ranks.size() + " ranks.");
             }
         }
     }
@@ -155,7 +155,7 @@ public class RankManager {
         cacheManager.repairOrphanedRankIds(rankId -> getRank(rankId) != null, effectiveFallback);
 
         if (plugin.isDebug()) {
-            plugin.getLogger().info("[RankManager] Rank repair complete (fallback='" + effectiveFallback + "').");
+            plugin.getLogger().info("Rank repair complete (fallback='" + effectiveFallback + "').");
         }
     }
 }

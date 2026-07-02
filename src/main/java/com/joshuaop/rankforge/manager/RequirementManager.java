@@ -113,7 +113,7 @@ public class RequirementManager {
 
         if (plugin.getPlaytimeTracker() == null) {
             if (plugin.isDebug())
-                plugin.getLogger().warning("[Requirements] PlaytimeTracker is null — playtime check skipped.");
+                plugin.getLogger().warning("PlaytimeTracker is null — playtime check skipped.");
             return;
         }
 
@@ -132,7 +132,7 @@ public class RequirementManager {
                 unmet.add("§7Mob Kills: §c" + required + " §8(have " + kills + ")");
         } catch (Exception e) {
             if (plugin.isDebug())
-                plugin.getLogger().warning("[Requirements] Mob-kills check failed: " + e.getMessage());
+                plugin.getLogger().warning("Mob-kills check failed: " + e.getMessage());
         }
     }
 
@@ -152,7 +152,7 @@ public class RequirementManager {
         if (plugin.getBlockBreakTracker() != null) {
             actual = plugin.getBlockBreakTracker().getCount(player.getUniqueId());
         } else if (plugin.isDebug()) {
-            plugin.getLogger().warning("[Requirements] BlockBreakTracker is null — block-breaks check skipped.");
+            plugin.getLogger().warning("BlockBreakTracker is null — block-breaks check skipped.");
             return;
         }
 
@@ -172,7 +172,7 @@ public class RequirementManager {
                 current = player.getStatistic(stat);
             } else {
                 if (plugin.isDebug())
-                    plugin.getLogger().info("[Requirements] Statistic '" + statId
+                    plugin.getLogger().info("Statistic '" + statId
                             + "' requires a type parameter — use custom requirement API for this.");
                 return;
             }
@@ -181,11 +181,11 @@ public class RequirementManager {
                         + " §8(have " + current + ")");
         } catch (IllegalArgumentException e) {
             if (plugin.isDebug())
-                plugin.getLogger().warning("[Requirements] Unknown statistic '" + statId
+                plugin.getLogger().warning("Unknown statistic '" + statId
                         + "' in rank '" + rank.getId() + "'");
         } catch (Exception e) {
             if (plugin.isDebug())
-                plugin.getLogger().warning("[Requirements] Statistic check failed: " + e.getMessage());
+                plugin.getLogger().warning("Statistic check failed: " + e.getMessage());
         }
     }
 
@@ -223,7 +223,7 @@ public class RequirementManager {
                             + " §8(have " + haveAmount + ")");
             } catch (IllegalArgumentException e) {
                 if (plugin.isDebug())
-                    plugin.getLogger().warning("[Requirements] Unknown material in rank '"
+                    plugin.getLogger().warning("Unknown material in rank '"
                             + rank.getId() + "': " + entry.getKey());
             }
         }
@@ -243,7 +243,7 @@ public class RequirementManager {
                 if (!req.check(player, rank, entry.getValue()))
                     unmet.add(req.getUnmetMessage(player, rank, entry.getValue()));
             } catch (Exception e) {
-                plugin.getLogger().warning("[Requirements] CustomRequirement '"
+                plugin.getLogger().warning("CustomRequirement '"
                         + entry.getKey() + "' threw exception: " + e.getMessage());
             }
         }

@@ -43,17 +43,15 @@ public class SyncService {
                 count++;
             }
             if (count > 0) {
-                plugin.getLogger().fine("[Sync] Flushed " + count + " player records to MySQL.");
+                plugin.getLogger().fine("Flushed " + count + " player records to MySQL.");
             }
         }, interval, interval);
 
-        plugin.getLogger().info("[Sync] MySQL sync started (every " + interval + " ticks).");
     }
 
     public void stop() {
         if (task != null && !task.isCancelled()) {
             task.cancel();
-            plugin.getLogger().info("[Sync] Background sync stopped.");
         }
     }
 

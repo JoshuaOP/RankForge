@@ -15,7 +15,6 @@ import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -45,14 +44,8 @@ public class McVersionNotifier implements Listener {
     public void checkOnStartup() {
         if (!plugin.getConfig().getBoolean("mc-version-notifier.enabled", true)) return;
 
-        Logger log = plugin.getLogger();
-        log.info("[MC Version] Detected: " + detectedVersion);
-
-        if (supported) {
-            log.info("[MC Version] ✔ Version " + detectedVersion + " is supported.");
-        } else {
-            log.warning("[MC Version] ✘ Version " + detectedVersion + " is not in the offline supported list.");
-            log.info("[MC Version] Fetching latest supported versions from PaperMC API…");
+        if (!supported) {
+            plugin.getLogger().warning("MC version " + detectedVersion + " is not in the supported list — fetching latest from PaperMC API.");
         }
 
         // Always fetch the latest list async — updates the in-memory set
@@ -83,16 +76,12 @@ public class McVersionNotifier implements Listener {
                     parseVersions(response.body());
                     // Re-evaluate after fetching
                     supported = supportedVersions.contains(detectedVersion);
-                    if (supported) {
-                        plugin.getLogger().info("[MC Version] ✔ PaperMC API confirms version "
-                                + detectedVersion + " is supported.");
-                    } else {
-                        plugin.getLogger().warning("[MC Version] ✘ PaperMC API does not list version "
+                    if (!supported) {
+                        plugin.getLogger().warning("PaperMC API does not list MC version "
                                 + detectedVersion + ". Plugin may still work.");
                     }
                 }
-            } catch (Exception e) {
-                plugin.getLogger().info("[MC Version] Could not reach PaperMC API — using offline list.");
+            } catch (Exception ignored) {
             }
         });
     }

@@ -64,7 +64,7 @@ public class RankReloadCommand {
             sender.sendMessage("  §7Active sessions preserved: §e" + activeSessions.size());
         }
 
-        plugin.getLogger().info("[Reload] Safe hot-reload triggered by " + sender.getName()
-                + " completed in " + elapsed + "ms.");
+        plugin.getLogger().info("Configuration reloaded by " + sender.getName()
+                + " in " + elapsed + "ms.");
     }
 }

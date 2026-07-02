@@ -427,7 +427,7 @@ public class RankAdminCommand {
                     }
                 });
             } catch (Exception e) {
-                plugin.getLogger().warning("[RankAdminCommand] Offline rank change failed for "
+                plugin.getLogger().warning("Offline rank change failed for "
                         + targetName + ": " + e.getMessage());
                 Bukkit.getScheduler().runTask(plugin, () ->
                         s.sendMessage("§c✘ An internal error occurred while updating "

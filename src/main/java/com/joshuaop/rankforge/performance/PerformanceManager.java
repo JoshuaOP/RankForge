@@ -71,9 +71,6 @@ public class PerformanceManager {
         else                                newMode = PerformanceMode.LOW;
 
         if (newMode != currentMode) {
-            plugin.getLogger().info(
-                    "[Perf] Mode switched " + currentMode + " → " + newMode
-                    + " (TPS: " + String.format("%.1f", tps) + ")");
             currentMode = newMode;
         }
     }

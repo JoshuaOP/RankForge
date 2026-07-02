@@ -45,7 +45,7 @@ public class RankDataRepository {
                 return data;
             }
         } catch (SQLException e) {
-            plugin.getLogger().warning("[DB] MySQL load failed for " + uuid + ": " + e.getMessage());
+            plugin.getLogger().warning("MySQL load failed for " + uuid + ": " + e.getMessage());
         }
         PlayerData def = makeDefault(uuid, playerName);
         save(def);
@@ -98,7 +98,7 @@ public class RankDataRepository {
             ps.setLong(8,   data.playTime());
             ps.executeUpdate();
         } catch (SQLException e) {
-            plugin.getLogger().warning("[DB] MySQL save failed for " + data.uuid() + ": " + e.getMessage());
+            plugin.getLogger().warning("MySQL save failed for " + data.uuid() + ": " + e.getMessage());
         }
     }
 
@@ -120,7 +120,7 @@ public class RankDataRepository {
             ResultSet rs = ps.executeQuery();
             while (rs.next()) result.add(fromResultSet(rs));
         } catch (SQLException e) {
-            plugin.getLogger().warning("[DB] getTopPlayers failed: " + e.getMessage());
+            plugin.getLogger().warning("getTopPlayers failed: " + e.getMessage());
         }
         return result;
     }
@@ -138,17 +138,11 @@ public class RankDataRepository {
         // block_breaks and playtime_minutes may be absent in older databases before migration runs.
         long blockBreaks = 0L;
         try { blockBreaks = rs.getLong("block_breaks"); }
-        catch (SQLException e) {
-            if (plugin.isDebug())
-                plugin.getLogger().warning("[DB] Could not read block_breaks column: " + e.getMessage());
-        }
+        catch (SQLException ignored) {}
 
         long playTime = 0L;
         try { playTime = rs.getLong("playtime_minutes"); }
-        catch (SQLException e) {
-            if (plugin.isDebug())
-                plugin.getLogger().warning("[DB] Could not read playtime_minutes column: " + e.getMessage());
-        }
+        catch (SQLException ignored) {}
 
         return new PlayerData(
                 UUID.fromString(rs.getString("uuid")),

@@ -84,7 +84,7 @@ public class RankForgePlaceholders extends PlaceholderExpansion {
             };
         } catch (Exception e) {
             if (plugin.isDebug()) {
-                plugin.getLogger().warning("[Placeholders] Exception for placeholder '"
+                plugin.getLogger().warning("Exception for placeholder '"
                         + params + "' on " + op.getName() + ": " + e.getMessage());
             }
             return "";

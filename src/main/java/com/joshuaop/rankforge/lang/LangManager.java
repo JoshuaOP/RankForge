@@ -54,8 +54,6 @@ public class LangManager {
                 langs.put(langCode, YamlConfiguration.loadConfiguration(file));
             }
         }
-
-        plugin.getLogger().info("[Lang] Dynamically indexed " + langs.size() + " language profiles: " + langs.keySet());
     }
 
     // ── Message Retrieval ─────────────────────────────────────────────────────

@@ -38,7 +38,7 @@ public class DatabaseManager {
             return tryMySQL(cfg);
         }
 
-        plugin.getLogger().info("[DB] Database type is not 'mysql' — using YAML file storage.");
+        plugin.getLogger().info("Database type is not 'mysql' — using YAML file storage.");
         return false;
     }
 
@@ -73,13 +73,13 @@ public class DatabaseManager {
             dataSource = new HikariDataSource(config);
             new MySQLProvider(this).createTables();
             available = true;
-            plugin.getLogger().info("[DB] Connected to MySQL successfully.");
+            plugin.getLogger().info("Connected to MySQL successfully.");
             return true;
         } catch (Exception e) {
             String reason = e.getMessage() != null
                     ? e.getMessage().split("\\.")[0]
                     : e.getClass().getSimpleName();
-            plugin.getLogger().info("[DB] MySQL not available — using YAML file storage. ("
+            plugin.getLogger().info("MySQL not available — using YAML file storage. ("
                     + reason + ")");
             if (dataSource != null && !dataSource.isClosed()) dataSource.close();
             dataSource = null;
@@ -92,7 +92,6 @@ public class DatabaseManager {
     public void disconnect() {
         if (dataSource != null && !dataSource.isClosed()) {
             dataSource.close();
-            plugin.getLogger().info("[DB] MySQL connection pool closed.");
         }
         available = false;
     }

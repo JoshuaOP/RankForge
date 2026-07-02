@@ -116,7 +116,7 @@ public class PlayerDataEditorGUI {
             return data;
         } catch (Exception e) {
             if (plugin.isDebug()) {
-                plugin.getLogger().warning("[PlayerDataEditorGUI] loadTargetData failed for "
+                plugin.getLogger().warning("loadTargetData failed for "
                         + uuid + ": " + e.getMessage());
             }
             String defaultRank = plugin.getConfig().getString("ranks.default-rank", "Guest");
@@ -163,7 +163,7 @@ public class PlayerDataEditorGUI {
             inv.setItem(4, skull);
         } catch (Exception e) {
             if (plugin.isDebug()) {
-                plugin.getLogger().warning("[PlayerDataEditorGUI] buildPlayerHead failed for "
+                plugin.getLogger().warning("buildPlayerHead failed for "
                         + uuid + ": " + e.getMessage());
             }
         }
@@ -333,7 +333,7 @@ public class PlayerDataEditorGUI {
             }
         } catch (Exception e) {
             if (plugin.isDebug()) {
-                plugin.getLogger().warning("[PlayerDataEditorGUI] syncOnlinePlayer failed: "
+                plugin.getLogger().warning("syncOnlinePlayer failed: "
                         + e.getMessage());
             }
         }
@@ -347,7 +347,7 @@ public class PlayerDataEditorGUI {
             }
         } catch (Exception e) {
             if (plugin.isDebug()) {
-                plugin.getLogger().warning("[PlayerDataEditorGUI] syncOfflinePlayer failed for "
+                plugin.getLogger().warning("syncOfflinePlayer failed for "
                         + uuid + ": " + e.getMessage());
             }
         }
@@ -404,7 +404,7 @@ public class PlayerDataEditorGUI {
             try {
                 plugin.getRankManager().getRepository().save(data);
             } catch (Exception e) {
-                plugin.getLogger().warning("[PlayerDataEditorGUI] Async save failed for "
+                plugin.getLogger().warning("Async save failed for "
                         + data.uuid() + ": " + e.getMessage());
             }
         });
@@ -429,7 +429,7 @@ public class PlayerDataEditorGUI {
                     plugin.getSoftDependency().setBalance(online, 0.0);
             } catch (Exception e) {
                 if (plugin.isDebug())
-                    plugin.getLogger().warning("[PlayerDataEditorGUI] resetPlayerData sync failed: "
+                    plugin.getLogger().warning("resetPlayerData sync failed: "
                             + e.getMessage());
             }
         } else {

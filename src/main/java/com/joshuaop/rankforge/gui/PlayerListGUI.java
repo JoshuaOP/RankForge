@@ -128,7 +128,7 @@ public class PlayerListGUI {
             return skull;
         } catch (Exception e) {
             if (plugin.isDebug()) {
-                plugin.getLogger().warning("[PlayerListGUI] Failed to build skull for "
+                plugin.getLogger().warning("Failed to build skull for "
                         + data.uuid() + ": " + e.getMessage());
             }
             return null;
@@ -239,7 +239,7 @@ public class PlayerListGUI {
                     String.CASE_INSENSITIVE_ORDER));
         } catch (Exception e) {
             if (plugin.isDebug()) {
-                plugin.getLogger().warning("[PlayerListGUI] Failed to collect player list: " + e.getMessage());
+                plugin.getLogger().warning("Failed to collect player list: " + e.getMessage());
             }
         }
         return result;

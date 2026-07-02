@@ -35,7 +35,6 @@ public class PermissionNodeGenerator {
             if (register(node, PermissionDefault.FALSE)) count++;
         }
 
-        plugin.getLogger().info("[Perms] Registered " + count + " permission nodes.");
     }
 
     /**

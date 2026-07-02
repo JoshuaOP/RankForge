@@ -170,7 +170,7 @@ public class ProgressService {
                         String.valueOf(have), String.valueOf(req), pct));
             } catch (IllegalArgumentException e) {
                 if (plugin.isDebug()) {
-                    plugin.getLogger().warning("[ProgressService] Unknown material in items requirement: "
+                    plugin.getLogger().warning("Unknown material in items requirement: "
                             + entry.getKey());
                 }
             }
@@ -214,7 +214,7 @@ public class ProgressService {
             Statistic stat = Statistic.valueOf(statId.toUpperCase());
             if (stat.getType() != Statistic.Type.UNTYPED) {
                 if (plugin.isDebug())
-                    plugin.getLogger().warning("[ProgressService] Statistic '" + statId
+                    plugin.getLogger().warning("Statistic '" + statId
                             + "' is not UNTYPED and cannot be read without a type parameter.");
                 return;
             }
@@ -224,11 +224,11 @@ public class ProgressService {
                     String.format("%,d", have), String.format("%,d", reqVal), pct));
         } catch (IllegalArgumentException e) {
             if (plugin.isDebug())
-                plugin.getLogger().warning("[ProgressService] Unknown statistic '" + statId
+                plugin.getLogger().warning("Unknown statistic '" + statId
                         + "' — check ranks.yml spelling. Skipping progress entry.");
         } catch (Exception e) {
             if (plugin.isDebug())
-                plugin.getLogger().warning("[ProgressService] Statistic check failed for '"
+                plugin.getLogger().warning("Statistic check failed for '"
                         + statId + "': " + e.getMessage());
         }
     }
@@ -250,7 +250,7 @@ public class ProgressService {
                         met ? "§aMet" : "§cUnmet", "Met", met ? 100.0 : 0.0));
             } catch (Exception e) {
                 if (plugin.isDebug()) {
-                    plugin.getLogger().warning("[ProgressService] CustomRequirement '"
+                    plugin.getLogger().warning("CustomRequirement '"
                             + entry.getKey() + "' threw: " + e.getMessage());
                 }
             }

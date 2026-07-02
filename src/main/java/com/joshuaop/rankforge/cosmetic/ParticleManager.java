@@ -92,7 +92,7 @@ public class ParticleManager {
         } catch (IllegalArgumentException e) {
             particle = Particle.CRIT;
             if (plugin.isDebug())
-                plugin.getLogger().warning("[Particles] Unknown particle '" + particleName
+                plugin.getLogger().warning("Unknown particle '" + particleName
                         + "' for rank '" + rankId + "' — defaulting to CRIT.");
         }
 
@@ -160,7 +160,7 @@ public class ParticleManager {
             player.getWorld().spawnParticle(particle, loc, count, 0.2, 0.0, 0.2, 0);
         } catch (Exception e) {
             if (plugin.isDebug())
-                plugin.getLogger().warning("[Particles] Failed to spawn particle: " + e.getMessage());
+                plugin.getLogger().warning("Failed to spawn particle: " + e.getMessage());
         }
     }
 

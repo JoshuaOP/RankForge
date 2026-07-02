@@ -86,8 +86,8 @@ public class SoundManager {
                 try {
                     return Sound.valueOf(legacyFallback);
                 } catch (IllegalArgumentException finalEx) {
-                    plugin.getLogger().warning("[Sound] Could not find a matching sound enum for path: " 
-                            + path + " (Tried: " + name + ", " + primaryFallback + ", " + legacyFallback + ")");
+                    plugin.getLogger().warning("Could not find a valid sound for '" + path
+                            + "' (Tried: " + name + ", " + primaryFallback + ", " + legacyFallback + ")");
                     return null;
                 }
             }

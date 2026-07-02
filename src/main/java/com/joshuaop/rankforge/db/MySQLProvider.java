@@ -55,10 +55,9 @@ public class MySQLProvider {
              Statement stmt = conn.createStatement()) {
             stmt.execute(createPlayers);
             stmt.execute(createRankLog);
-            RankForge.getInstance().getLogger().info("[DB] MySQL tables verified/created.");
         } catch (SQLException e) {
             RankForge.getInstance().getLogger().severe(
-                    "[DB] Failed to create MySQL tables: " + e.getMessage());
+                    "Failed to create MySQL tables: " + e.getMessage());
         }
 
         // Safe column migrations for existing installations using INFORMATION_SCHEMA checks
@@ -86,13 +85,11 @@ public class MySQLProvider {
                 String alter = "ALTER TABLE " + table + " ADD COLUMN " + column + " " + definition;
                 try (Statement stmt = conn.createStatement()) {
                     stmt.execute(alter);
-                    RankForge.getInstance().getLogger().info(
-                            "[DB] Added column '" + column + "' to table '" + table + "'.");
                 }
             }
         } catch (SQLException e) {
             RankForge.getInstance().getLogger().warning(
-                    "[DB] Column migration check failed (" + table + "." + column + "): "
+                    "Column migration check failed (" + table + "." + column + "): "
                             + e.getMessage());
         }
     }
@@ -107,7 +104,7 @@ public class MySQLProvider {
             ps.executeUpdate();
         } catch (SQLException e) {
             RankForge.getInstance().getLogger().warning(
-                    "[DB] Failed to log rank change: " + e.getMessage());
+                    "Failed to log rank change: " + e.getMessage());
         }
     }
 }

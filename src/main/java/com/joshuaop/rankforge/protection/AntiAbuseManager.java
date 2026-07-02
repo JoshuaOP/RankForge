@@ -93,7 +93,7 @@ public class AntiAbuseManager {
     private void warn(UUID playerId, String reason) {
         Player p = plugin.getServer().getPlayer(playerId);
         String name = p != null ? p.getName() : playerId.toString();
-        plugin.getLogger().warning("[AntiAbuse] " + name + " — " + reason);
+        plugin.getLogger().warning("Anti-abuse: " + name + " — " + reason);
     }
 
     // ── Inner record ──────────────────────────────────────────────────────────

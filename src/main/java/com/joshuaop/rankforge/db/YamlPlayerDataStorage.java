@@ -52,7 +52,7 @@ public class YamlPlayerDataStorage {
                 persist();
                 return;
             } catch (IOException e) {
-                plugin.getLogger().severe("[YamlStorage] Could not create playerdata.yml: " + e.getMessage());
+                plugin.getLogger().severe("Could not create playerdata.yml: " + e.getMessage());
             }
         }
         yaml = YamlConfiguration.loadConfiguration(dataFile);
@@ -62,7 +62,7 @@ public class YamlPlayerDataStorage {
         int savedVersion = yaml.getInt("data-version", 1);
         if (savedVersion >= CURRENT_DATA_VERSION) return;
 
-        plugin.getLogger().info("[Storage] Migrating player data v" + savedVersion
+        plugin.getLogger().info("Migrating player data v" + savedVersion
                 + " → v" + CURRENT_DATA_VERSION + "...");
 
         if (savedVersion < 2) migrateV1ToV2();
@@ -71,7 +71,7 @@ public class YamlPlayerDataStorage {
 
         yaml.set("data-version", CURRENT_DATA_VERSION);
         persist();
-        plugin.getLogger().info("[Storage] Migration complete.");
+        plugin.getLogger().info("Player data migration complete.");
     }
 
     /** v1 → v2: rename legacy-rank-node → rank */
@@ -97,7 +97,6 @@ public class YamlPlayerDataStorage {
                 yaml.set(path, 0L);
             }
         }
-        plugin.getLogger().info("[Storage] v2→v3: added block-breaks field to all player records.");
     }
 
     /**
@@ -117,8 +116,6 @@ public class YamlPlayerDataStorage {
                 count++;
             }
         }
-        plugin.getLogger().info("[Storage] v3→v4: added playtime-minutes field to "
-                + count + " player records.");
     }
 
     // ── Player Read/Write ─────────────────────────────────────────────────────
@@ -209,7 +206,7 @@ public class YamlPlayerDataStorage {
     private void persist() {
         try { yaml.save(dataFile); }
         catch (IOException e) {
-            plugin.getLogger().warning("[YamlStorage] Failed to save playerdata.yml: " + e.getMessage());
+            plugin.getLogger().warning("Failed to save playerdata.yml: " + e.getMessage());
         }
     }
 

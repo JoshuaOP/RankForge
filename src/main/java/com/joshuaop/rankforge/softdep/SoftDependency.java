@@ -63,7 +63,7 @@ public class SoftDependency implements Listener {
             data = data.withRank(fallback);
             plugin.getRankManager().getCacheManager().put(uuid, data);
             if (plugin.isDebug()) plugin.getLogger().info(
-                    "[SoftDep] Repaired orphaned rank for " + player.getName() + " → '" + fallback + "'");
+                    "Repaired orphaned rank for " + player.getName() + " → '" + fallback + "'");
         }
 
         applyRankPermissions(player, data.rankId());
@@ -101,18 +101,18 @@ public class SoftDependency implements Listener {
 
     private void setupVault() {
         if (plugin.getServer().getPluginManager().getPlugin("Vault") == null) {
-            plugin.getLogger().info("[RankForge] Vault not found. Economy features disabled.");
+            plugin.getLogger().info("Vault not found. Economy features disabled.");
             return;
         }
         try {
             vaultAdapter = VaultAdapter.create(plugin);
             if (vaultAdapter != null) {
-                plugin.getLogger().info("[RankForge] \u2713 Vault integration enabled.");
+                plugin.getLogger().info("\u2713 Vault integration enabled.");
             } else {
-                plugin.getLogger().warning("[RankForge] Vault found but no Economy provider is registered.");
+                plugin.getLogger().warning("Vault found but no Economy provider is registered.");
             }
         } catch (Exception e) {
-            plugin.getLogger().warning("[RankForge] Vault hook failed: " + e.getMessage());
+            plugin.getLogger().warning("Vault hook failed: " + e.getMessage());
         }
     }
 
@@ -143,19 +143,19 @@ public class SoftDependency implements Listener {
 
     private void setupLuckPerms() {
         if (plugin.getServer().getPluginManager().getPlugin("LuckPerms") == null) {
-            plugin.getLogger().info("[RankForge] LuckPerms not found. Permission integration disabled.");
+            plugin.getLogger().info("LuckPerms not found. Permission integration disabled.");
             return;
         }
         try {
             luckPermsHook = LuckPermsHook.create(plugin);
             if (luckPermsHook != null) {
-                plugin.getLogger().info("[RankForge] \u2713 LuckPerms integration enabled.");
+                plugin.getLogger().info("\u2713 LuckPerms integration enabled.");
             } else {
-                plugin.getLogger().warning("[RankForge] LuckPerms found but service provider is unavailable.");
+                plugin.getLogger().warning("LuckPerms found but service provider is unavailable.");
             }
         } catch (Exception e) {
             if (plugin.isDebug()) {
-                plugin.getLogger().info("[SoftDep-Debug] LuckPerms hook failed: " + e.getMessage());
+                plugin.getLogger().warning("LuckPerms hook failed: " + e.getMessage());
             }
         }
     }
@@ -185,9 +185,9 @@ public class SoftDependency implements Listener {
     private void checkPapi() {
         papiEnabled = plugin.getServer().getPluginManager().getPlugin("PlaceholderAPI") != null;
         if (papiEnabled) {
-            plugin.getLogger().info("[RankForge] \u2713 PlaceholderAPI integration enabled.");
+            plugin.getLogger().info("\u2713 PlaceholderAPI integration enabled.");
         } else {
-            plugin.getLogger().info("[RankForge] PlaceholderAPI not found. Placeholder support disabled.");
+            plugin.getLogger().info("PlaceholderAPI not found. Placeholder support disabled.");
         }
     }
 
@@ -197,9 +197,9 @@ public class SoftDependency implements Listener {
         floodgateEnabled = plugin.getServer().getPluginManager().getPlugin("floodgate") != null
                 || plugin.getServer().getPluginManager().getPlugin("Floodgate") != null;
         if (floodgateEnabled) {
-            plugin.getLogger().info("[RankForge] \u2713 Floodgate integration enabled.");
+            plugin.getLogger().info("\u2713 Floodgate integration enabled.");
         } else {
-            plugin.getLogger().info("[RankForge] Floodgate not found. Bedrock support disabled.");
+            plugin.getLogger().info("Floodgate not found. Bedrock support disabled.");
         }
     }
 
