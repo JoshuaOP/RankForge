@@ -30,41 +30,38 @@ public class RankReloadCommand {
         sender.sendMessage("§6[RankForge] §7Initiating safe hot-reload context...");
         long start = System.currentTimeMillis();
 
-        // 1. Intercept active data profiles to guarantee zero data loss during memory rebuilds
-        CacheManager oldCache = plugin.getRankManager().getCacheManager();
+        // 1. Flush live tracker counters into cache so the YAML safety save below
+        //    captures the most current block-break and playtime values.
+        if (plugin.getBlockBreakTracker() != null) plugin.getBlockBreakTracker().flushAll();
+        if (plugin.getPlaytimeTracker()    != null) plugin.getPlaytimeTracker().flushAll();
+
+        // 2. Take a snapshot of active sessions and write a YAML safety backup.
+        //    This is a disk-level guard only — the CacheManager itself is never
+        //    destroyed during reload, so in-memory data is already preserved.
+        CacheManager cache = plugin.getRankManager().getCacheManager();
         Collection<PlayerData> activeSessions = null;
-        
-        if (oldCache != null) {
-            // Retrieve stitched runtime data structures matching ongoing online sessions
-            activeSessions = oldCache.getOnlineAndUnexpired();
-            
-            // Proactively dump existing profiles onto flat-file disk or sync pipelines
+
+        if (cache != null) {
+            activeSessions = cache.getOnlineAndUnexpired();
             if (plugin.getYamlPlayerDataStorage() != null && !activeSessions.isEmpty()) {
                 plugin.getYamlPlayerDataStorage().saveAll(activeSessions);
             }
         }
 
-        // 2. Perform structural file system and implementation instance swaps
+        // 3. Perform the reload (config, ranks, lang, cosmetics, tasks, etc.).
+        //    plugin.reload() internally calls rankManager.repairOrphanedRanks()
+        //    which fixes any player whose rank ID no longer exists after a
+        //    ranks.yml change.  The CacheManager is the same instance throughout —
+        //    do NOT re-populate the cache afterwards or those repairs are undone.
         plugin.reload();
-
-        // 3. Re-populate the brand new cache context with our preserved session states
-        if (activeSessions != null && !activeSessions.isEmpty()) {
-            CacheManager newCache = plugin.getRankManager().getCacheManager();
-            if (newCache != null) {
-                for (PlayerData sessionData : activeSessions) {
-                    // Seed newly instantiated manager cache without breaking active session hooks
-                    newCache.put(sessionData.uuid(), sessionData);
-                }
-            }
-        }
 
         long elapsed = System.currentTimeMillis() - start;
 
         sender.sendMessage("§6[RankForge] §aFull reload complete §8(§e" + elapsed + "ms§8)");
         sender.sendMessage("  §7Ranks loaded: §e" + plugin.getRankManager().getRankCount());
-        
+
         if (activeSessions != null && !activeSessions.isEmpty()) {
-            sender.sendMessage("  §7Active Sessions Restructured: §e" + activeSessions.size());
+            sender.sendMessage("  §7Active sessions preserved: §e" + activeSessions.size());
         }
 
         plugin.getLogger().info("[Reload] Safe hot-reload triggered by " + sender.getName()

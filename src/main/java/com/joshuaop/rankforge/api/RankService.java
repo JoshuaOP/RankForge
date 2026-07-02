@@ -9,8 +9,14 @@ import com.joshuaop.rankforge.experience.RankHistoryEntry;
 import com.joshuaop.rankforge.rank.RankManager;
 import com.joshuaop.rankforge.rank.RankModel;
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
+import org.bukkit.Statistic;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import java.util.Map;
+import java.util.UUID;
+
 
 /**
  * Core business logic for all rank operations.
@@ -117,9 +123,133 @@ public class RankService {
             plugin.getExperienceManager().deductRankup(player, resolvedId);
         }
 
+        // Reset all tracked requirement progress after a successful rank-up.
+        resetTrackedProgress(player, nextModel);
+
         plugin.getHookRegistry().fireRankup(player, oldRankId, resolvedId);
 
         return true;
+    }
+
+    /**
+     * Resets every progress-based requirement counter to zero (or consumes items)
+     * after a rank-up.
+     *
+     * <h3>Reset behaviour per type:</h3>
+     * <ul>
+     *   <li><b>block-breaks</b> — reset to 0 unconditionally
+     *       ({@link com.joshuaop.rankforge.tracker.BlockBreakTracker})</li>
+     *   <li><b>playtime</b> — reset to 0 unconditionally
+     *       ({@link com.joshuaop.rankforge.tracker.PlaytimeTracker})</li>
+     *   <li><b>mob-kills</b> — Bukkit {@code MOB_KILLS} statistic reset to 0 unconditionally</li>
+     *   <li><b>statistic</b> — the untyped Bukkit statistic required by {@code achieved}
+     *       is reset to 0 (rank-specific, conditional on the rank having a statistic field)</li>
+     *   <li><b>items</b> — required items consumed from the player's inventory
+     *       (rank-specific, conditional on the rank having item requirements)</li>
+     *   <li><b>quests</b> — always live-checked via permission nodes; not reset here</li>
+     *   <li><b>custom</b> — always live-checked via the API; not reset here</li>
+     *   <li><b>money / xp-level</b> — always deducted in {@link #doRankUp} before this
+     *       method is called; never part of this reset</li>
+     *   <li><b>permission / worlds</b> — always live-checked; not reset here</li>
+     * </ul>
+     *
+     * @param player    the player who just ranked up
+     * @param achieved  the {@link RankModel} whose requirements were just met; may be
+     *                  {@code null} if an event listener resolved an unknown rank ID —
+     *                  unconditional resets still run; rank-specific ones are skipped
+     */
+    private void resetTrackedProgress(Player player, RankModel achieved) {
+        UUID uuid = player.getUniqueId();
+
+        // ── Unconditional resets (always run regardless of rank model) ────────
+
+        // Block Breaks — clears the RankForge custom counter
+        if (plugin.getBlockBreakTracker() != null) {
+            plugin.getBlockBreakTracker().setCount(uuid, 0L);
+        }
+
+        // Playtime — clears the wall-clock playtime counter
+        if (plugin.getPlaytimeTracker() != null) {
+            plugin.getPlaytimeTracker().setPlayTime(uuid, 0L);
+        }
+
+        // Mob Kills — clears the vanilla MOB_KILLS statistic
+        try {
+            player.setStatistic(Statistic.MOB_KILLS, 0);
+        } catch (Exception e) {
+            if (plugin.isDebug()) {
+                plugin.getLogger().warning(
+                        "[RankService] Could not reset MOB_KILLS for "
+                                + player.getName() + ": " + e.getMessage());
+            }
+        }
+
+        // ── Rank-specific resets (skipped when achieved rank model is unavailable) ─
+
+        if (achieved == null) return;
+
+        // Statistic — reset whichever untyped Bukkit statistic the achieved rank required
+        // so that consecutive ranks sharing the same statistic always start from zero.
+        String statId = achieved.getRequiredStatisticId();
+        if (statId != null && !statId.isBlank() && achieved.getRequiredStatisticValue() > 0) {
+            try {
+                Statistic stat = Statistic.valueOf(statId.toUpperCase());
+                if (stat.getType() == Statistic.Type.UNTYPED) {
+                    player.setStatistic(stat, 0);
+                }
+            } catch (IllegalArgumentException e) {
+                if (plugin.isDebug()) {
+                    plugin.getLogger().warning(
+                            "[RankService] Unknown statistic '" + statId
+                                    + "' — cannot reset. Check ranks.yml spelling.");
+                }
+            } catch (Exception e) {
+                if (plugin.isDebug()) {
+                    plugin.getLogger().warning(
+                            "[RankService] Could not reset statistic '" + statId
+                                    + "' for " + player.getName() + ": " + e.getMessage());
+                }
+            }
+        }
+
+        // Items — consume required items from the player's inventory.
+        Map<String, Integer> requiredItems = achieved.getRequiredItems();
+        if (requiredItems != null && !requiredItems.isEmpty()) {
+            consumeRequiredItems(player, requiredItems);
+        }
+    }
+
+    /**
+     * Removes the specified item quantities from the player's inventory.
+     *
+     * <p>Each material is removed up to the required amount. If the player has fewer
+     * than the required amount (e.g. due to a race condition), the remainder is silently
+     * ignored — the requirement check already confirmed they had enough.
+     *
+     * @param player the player whose inventory to modify
+     * @param items  map of material name → quantity to remove
+     */
+    private void consumeRequiredItems(Player player, Map<String, Integer> items) {
+        for (Map.Entry<String, Integer> entry : items.entrySet()) {
+            try {
+                Material mat    = Material.valueOf(entry.getKey().toUpperCase());
+                int      amount = entry.getValue();
+                if (amount <= 0) continue;
+                player.getInventory().removeItem(new ItemStack(mat, amount));
+            } catch (IllegalArgumentException e) {
+                if (plugin.isDebug()) {
+                    plugin.getLogger().warning(
+                            "[RankService] Unknown material '" + entry.getKey()
+                                    + "' — cannot consume items. Check ranks.yml spelling.");
+                }
+            } catch (Exception e) {
+                if (plugin.isDebug()) {
+                    plugin.getLogger().warning(
+                            "[RankService] Could not consume item '" + entry.getKey()
+                                    + "' for " + player.getName() + ": " + e.getMessage());
+                }
+            }
+        }
     }
 
     private void applyRank(Player player, String newRankId, RankHistoryEntry.ChangeType changeType) {

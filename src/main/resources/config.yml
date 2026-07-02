@@ -116,6 +116,7 @@ yaml-ranks:
 #   worlds         — Player must be in one of the listed worlds when ranking up
 #   items          — Player must have specific items in their inventory
 #   custom         — Third-party requirements via CustomRequirementRegistry API
+#
 requirements:
   enabled: true
   types:
