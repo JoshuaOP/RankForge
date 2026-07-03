@@ -25,7 +25,7 @@ public class UpdateChecker implements Listener {
 
     private static final int    SPIGOT_RESOURCE_ID = 134929;
     private static final String SPIGOT_API_URL     = "https://api.spigotmc.org/legacy/update.php?resource=" + SPIGOT_RESOURCE_ID;
-    private static final String SPIGOT_PAGE_URL    = "https://www.spigotmc.org/resources/%E2%9C%A6-rankforge-%E2%9A%A1.134929/";
+    private static final String SPIGOT_PAGE_URL    = "https://www.spigotmc.org/resources/✦rankforge-⚡-advanced-custom-gui-rank-system-requirements.134929/";
 
     private static final Pattern SEMVER = Pattern.compile("(\\d+\\.\\d+(?:\\.\\d+)?)");
 
