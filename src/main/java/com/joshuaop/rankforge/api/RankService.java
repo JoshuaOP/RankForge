@@ -126,6 +126,20 @@ public class RankService {
         // Reset all tracked requirement progress after a successful rank-up.
         resetTrackedProgress(player, nextModel);
 
+        // Clear any admin-granted requirement bypasses — they were for this rank only.
+        if (plugin.getBypassRegistry() != null) {
+            plugin.getBypassRegistry().clearAll(player.getUniqueId());
+        }
+
+        // Also clear the persisted completed-requirements record so a bypass granted
+        // for the previous rank doesn't silently carry over into the next one.
+        PlayerData afterRank = plugin.getRankManager().getCacheManager().get(player.getUniqueId());
+        if (afterRank != null && !afterRank.completedRequirements().isEmpty()) {
+            PlayerData cleared = afterRank.withCompletedRequirements(java.util.Set.of());
+            plugin.getRankManager().getCacheManager().put(player.getUniqueId(), cleared);
+            plugin.getRankManager().getRepository().save(cleared);
+        }
+
         plugin.getHookRegistry().fireRankup(player, oldRankId, resolvedId);
 
         return true;
@@ -139,8 +153,8 @@ public class RankService {
      * <ul>
      *   <li><b>block-breaks</b> — reset to 0 unconditionally
      *       ({@link com.joshuaop.rankforge.tracker.BlockBreakTracker})</li>
-     *   <li><b>playtime</b> — reset to 0 unconditionally
-     *       ({@link com.joshuaop.rankforge.tracker.PlaytimeTracker})</li>
+     *   <li><b>playtime</b> — <em>not reset</em>; treated as a cumulative lifetime
+     *       statistic so progress carries over to the next rank's requirement</li>
      *   <li><b>mob-kills</b> — Bukkit {@code MOB_KILLS} statistic reset to 0 unconditionally</li>
      *   <li><b>statistic</b> — the untyped Bukkit statistic required by {@code achieved}
      *       is reset to 0 (rank-specific, conditional on the rank having a statistic field)</li>
@@ -166,11 +180,6 @@ public class RankService {
         // Block Breaks — clears the RankForge custom counter
         if (plugin.getBlockBreakTracker() != null) {
             plugin.getBlockBreakTracker().setCount(uuid, 0L);
-        }
-
-        // Playtime — clears the wall-clock playtime counter
-        if (plugin.getPlaytimeTracker() != null) {
-            plugin.getPlaytimeTracker().setPlayTime(uuid, 0L);
         }
 
         // Mob Kills — clears the vanilla MOB_KILLS statistic

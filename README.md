@@ -6,7 +6,7 @@
 
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.17--1.21.4-brightgreen?style=for-the-badge&logo=minecraft)](https://www.minecraft.net/)
 [![Java](https://img.shields.io/badge/Java-21%2B-orange?style=for-the-badge&logo=openjdk)](https://adoptium.net/)
-[![Version](https://img.shields.io/badge/Version-2.9-purple?style=for-the-badge)](https://github.com/JoshuaOP/RankForge/releases)
+[![Version](https://img.shields.io/badge/Version-3.0-purple?style=for-the-badge)](https://github.com/JoshuaOP/RankForge/releases)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 [![bStats](https://img.shields.io/badge/bStats-31704-informational?style=for-the-badge)](https://bstats.org/plugin/bukkit/RankForge/31704)
 [![Issues](https://img.shields.io/github/issues/JoshuaOP/RankForge?style=for-the-badge)](https://github.com/JoshuaOP/RankForge/issues)
@@ -97,7 +97,7 @@ RankForge handles the entire lifecycle of rank progression:
 ### Requirements
 - 💰 **Money** — Vault economy balance
 - ⭐ **XP Level** — Vanilla Minecraft experience level
-- ⏱️ **Playtime** — Tracked via real wall-clock time (independent of server TPS)
+- ⏱️ **Playtime** — Tracked via real wall-clock time (independent of server TPS), configurable with a human-readable duration format (`1d 12hr 30m`) or plain minutes
 - ⚔️ **Mob Kills** — Tracked via vanilla `MOB_KILLS` statistic
 - 🪨 **Block Breaks** — Exact per-player counter via a dedicated event listener
 - 📊 **Bukkit Statistics** — Any untyped `Statistic` enum value
@@ -122,6 +122,7 @@ RankForge handles the entire lifecycle of rank progression:
 - ✏️ **Admin Editor GUI** — Create and edit ranks in-game
 - 🔀 **Drag-and-Drop Slot Editor** — Reorder ranks in the GUI without editing YAML
 - 👥 **Player List GUI** — Browse and edit any player's rank data in-game
+- 🎯 **Requirement Bypass** — Waive a single requirement for a specific player with `/rank bypassreq`, without force-setting their rank
 - 🌍 **Multi-Language** — Built-in: English, Spanish, Filipino, Indonesian; fully extensible
 - 🌐 **REST API** — Optional embedded HTTP server for external dashboard integrations
 - 📈 **Rank History** — Full per-player audit log of every rank change
@@ -174,13 +175,13 @@ None. RankForge works out of the box with zero required dependencies.
 
 ## 🚀 Installation
 
-1. **Download** `RankForge-2.9.jar` from the [Spigot page](https://www.spigotmc.org/resources/%E2%9C%A6-rankforge-%E2%9A%A1.134929/).
+1. **Download** `RankForge-3.0.jar` from the [Spigot page](https://www.spigotmc.org/resources/%E2%9C%A6-rankforge-%E2%9A%A1.134929/).
 
 2. **Drop the JAR** into your `plugins/` directory:
    ```
    server/
    └── plugins/
-       └── RankForge-2.9.jar
+       └── RankForge-3.0.jar
    ```
 
 3. **(Optional)** Install Vault, LuckPerms, and/or PlaceholderAPI for extra features.
@@ -224,7 +225,7 @@ On first launch, RankForge:
    ```
    [RankForge] [SoftDep] Vault=✓  LuckPerms=✓  PlaceholderAPI=✓  Floodgate=✗
    [RankForge] [Lang] Dynamically indexed 4 language profiles: [en, es, fil, id]
-   [RankForge] RankForge v2.9 successfully loaded! (5 ranks compiled)
+   [RankForge] RankForge v3.0 successfully loaded! (5 ranks compiled)
    ```
 3. Connects to MySQL (if configured) or initializes the YAML storage fallback
 4. Starts the TPS monitor and performance evaluator
@@ -550,6 +551,7 @@ All commands use the `/rank` base (aliased as `/ranks`).
 | `/rank remove <id>` | `rankforge.rank.delete` | Alias for `/rank delete` |
 | `/rank set <player> <rank>` | `rankforge.rank.set` | Set a player's rank (online or offline) |
 | `/rank force <player> <rank>` | `rankforge.rank.force` | Force-set a rank bypassing all checks |
+| `/rank bypassreq <player> <requirement>` | `rankforge.rank.bypassreq` | Mark a single requirement (e.g. `money`, `playtime`) as satisfied for a player, without force-setting their rank |
 | `/rank reset <player>` | `rankforge.rank.reset` | Reset a player's rank to the default |
 | `/rank xp set <player> <amount>` | `rankforge.rank.xp.admin` | Set a player's tracked experience |
 | `/rank xp add <player> <amount>` | `rankforge.rank.xp.admin` | Add to a player's tracked experience |
@@ -575,6 +577,9 @@ All commands use the `/rank` base (aliased as `/ranks`).
 # Admin force-sets rank without checking requirements
 /rank force Steve Elite
 
+# Admin waives a single requirement for Steve (e.g. he's grinding playtime elsewhere)
+/rank bypassreq Steve playtime
+
 # Admin resets Steve to the default rank
 /rank reset Steve
 
@@ -594,6 +599,9 @@ All commands use the `/rank` base (aliased as `/ranks`).
 
 > [!TIP]
 > `/rank set` and `/rank reset` support **offline players** — the change is stored in the database and applied the next time that player joins.
+
+> [!TIP]
+> `/rank bypassreq` records the waived requirement directly on the player's stored data, so it survives `/rank reload`, server restarts, and reconnects. It clears automatically the moment the player successfully ranks up, or if an admin resets their data from the [Player Data Editor GUI](#-gui-system).
 
 ---
 
@@ -624,6 +632,7 @@ All commands use the `/rank` base (aliased as `/ranks`).
 | `rankforge.rank.delete` | `op` | Delete ranks |
 | `rankforge.rank.set` | `op` | Set any player's rank |
 | `rankforge.rank.force` | `op` | Force-set a rank without requirement checks |
+| `rankforge.rank.bypassreq` | `op` | Waive a single requirement for a player via `/rank bypassreq` |
 | `rankforge.rank.reset` | `op` | Reset a player's rank |
 | `rankforge.rank.xp.admin` | `op` | Modify tracked XP for players |
 | `rankforge.rank.playerlist` | `op` | Open the player list GUI |
@@ -690,6 +699,16 @@ Or edit `ranks.yml` and run `/rank reload`.
 
 RankForge will ask you to confirm by typing `yes`. This action is irreversible — players whose current rank is deleted will be automatically repaired to the default rank on their next join.
 
+### Waiving a Single Requirement
+
+Sometimes a player has earned a requirement through means RankForge can't see directly — a giveaway, a support ticket, or a manual balance adjustment on another system. Rather than force-setting their whole rank, use:
+
+```
+/rank bypassreq Steve money
+```
+
+This marks just the `money` requirement as satisfied for Steve on his current rank; every other requirement is still checked normally. The bypass is saved to Steve's player data record, so it persists across reloads and reconnects, and is automatically cleared the moment he actually ranks up (or if his data is reset from the Player Data Editor GUI).
+
 ### Reordering Ranks in the GUI
 
 ```
@@ -702,7 +721,7 @@ Opens the drag-and-drop slot editor. Click and drag rank icons to change their G
 
 ## 📋 Rank Requirements
 
-Requirements are defined directly on each rank in `ranks.yml`. A player must satisfy **all** requirements simultaneously to rank up.
+Requirements are defined directly on each rank in `ranks.yml`. A player must satisfy **all** requirements simultaneously to rank up. If a specific player has a special circumstance, admins can waive a single requirement for them with `/rank bypassreq <player> <requirement>` (see [Managing Ranks](#-managing-ranks)) rather than editing `ranks.yml` or force-setting their rank.
 
 ### 💰 Money
 
@@ -960,9 +979,12 @@ A 54-slot editor opened by clicking any player in the Player List GUI. Provides 
 | 49 | Reset | Reset the player's data to server defaults |
 | 53 | Close | Close the GUI |
 
+> [!NOTE]
+> **Reset** also clears any active `/rank bypassreq` waivers for that player, alongside their rank, XP, and balance — so a reset always returns a player to a fully clean, server-default state.
+
 #### Rank History Button (Slot 16)
 
-Clicking the **Rank History** button sends the selected player's rank history directly to the administrator's chat — no new GUI or inventory is opened. The output is identical to running `/rank history` as that player: it uses the same `RankHistoryManager`, formatter, and display logic. Up to 10 entries are shown, newest first, including the timestamp, change type (Rankup / Set / Reset), and the from/to rank IDs. Works for both online and offline players.
+Clicking the **Rank History** button sends the selected player's rank history directly to the administrator's chat — no new GUI or inventory is opened. The output is identical to running `/rank history` as that player: it uses the same `RankHistoryManager`, formatter, and display logic. Up to 10 entries are shown, newest first, including the timestamp, change type (Rankup / Set / Reset), and the from/to rank IDs. Works for both online and offline players — a fast way to audit a player's progression without leaving the GUI.
 
 ### External GUI Registry (API)
 
@@ -1043,7 +1065,7 @@ With PlaceholderAPI installed, RankForge registers all `%rankforge_*%` placehold
 | `%rankforge_player%` | `Steve` | Player's name |
 | `%rankforge_uuid%` | `xxxxxxxx-...` | Player's UUID |
 | `%rankforge_lang%` | `en` | Player's active language code |
-| `%rankforge_version%` | `2.9` | Plugin version |
+| `%rankforge_version%` | `3.0` | Plugin version |
 
 ### Scoreboard Example (CMI)
 
@@ -1169,7 +1191,7 @@ sync:
   interval-ticks: 200    # Flush every 200 ticks (10 seconds)
 ```
 
-On shutdown, a final synchronous flush is always performed.
+On shutdown, a final synchronous flush is always performed. Writes are batched and debounced so that rapid rank, XP, or playtime changes don't trigger a disk write per change.
 
 ### MySQL
 
@@ -1187,7 +1209,7 @@ storage:
     pool-size: 10
 ```
 
-RankForge uses **HikariCP** for connection pooling. Tables are created automatically on first connection.
+RankForge uses **HikariCP** for connection pooling. Tables are created automatically on first connection. Reads and writes go through the same debounced batching as YAML storage, keeping MySQL round-trips low even under heavy rankup/XP activity.
 
 > [!WARNING]
 > Never commit `config.yml` to a public repository if it contains your MySQL credentials. Use environment variables or a secrets manager on production servers.
@@ -1230,6 +1252,10 @@ Mode transitions are logged to console:
 ```
 
 The TPS monitor runs as a repeating server task and evaluates every 200 ticks (10 seconds).
+
+### Storage & Sync Efficiency
+
+The YAML and MySQL storage backends batch writes and use debounced, asynchronous flushes so that frequent rank, XP, and playtime updates don't translate into constant disk or database I/O. Combined with the TPS-aware cosmetic throttling above, this keeps RankForge's overhead low even on busy servers with hundreds of concurrent players — reload, rankup, and GUI operations stay responsive under load.
 
 ---
 
@@ -1283,7 +1309,7 @@ Plugin status and rank count.
 ```json
 {
   "plugin": "RankForge",
-  "version": "2.9",
+  "version": "3.0",
   "ranks": 5,
   "players": 12
 }
@@ -1362,6 +1388,8 @@ Players can view their own history:
 
 Output shows the last 10 entries (older entries are shown as a count). History is stored persistently and loaded asynchronously to avoid blocking the main thread.
 
+Admins can pull up any player's history — online or offline — either with `/rank history <player>` or by clicking the **Rank History** button in the [Player Data Editor GUI](#-gui-system), both of which share the same formatter so the output is always consistent regardless of where it's viewed from.
+
 ---
 
 ## 🧩 Developer API
@@ -1380,7 +1408,7 @@ RankForge exposes a public API at `com.joshuaop.rankforge.api.RankForgeAPI`.
 <dependency>
   <groupId>com.github.JoshuaOP</groupId>
   <artifactId>RankForge</artifactId>
-  <version>2.9</version>
+  <version>3.0</version>
   <scope>provided</scope>
 </dependency>
 ```
@@ -1391,7 +1419,7 @@ repositories {
     maven { url 'https://jitpack.io' }
 }
 dependencies {
-    compileOnly 'com.github.JoshuaOP:RankForge:2.9'
+    compileOnly 'com.github.JoshuaOP:RankForge:3.0'
 }
 ```
 
@@ -1916,7 +1944,7 @@ A healthy startup looks like:
 [RankForge] [SoftDep] Vault=✓  LuckPerms=✓  PlaceholderAPI=✓  Floodgate=✗
 [RankForge] [Lang] Dynamically indexed 4 language profiles: [en, es, fil, id]
 [RankForge] [REST] API server listening on port 4567   ← (if enabled)
-[RankForge] RankForge v2.9 successfully loaded! (5 ranks compiled)
+[RankForge] RankForge v3.0 successfully loaded! (5 ranks compiled)
 ```
 
 If the rank count shows `(0 ranks compiled)`, `ranks.yml` failed to parse. Check for YAML syntax errors (indentation, missing colons, tab characters).
@@ -2003,27 +2031,27 @@ See [LICENSE](LICENSE) for the full text.
 
 ---
 
-## ⏱️ Real Playtime Tracking (v2.8)
+## ⏱️ Real Playtime Tracking
 
-> **New in v2.8** — Playtime requirements now use real elapsed wall-clock time, not Minecraft ticks.
+> Playtime requirements use real elapsed wall-clock time, not Minecraft ticks — accurate and unaffected by lag.
 
 ### How It Works
 
-RankForge v2.8 introduces `PlaytimeTracker`, a dedicated listener that records the exact moment each player joins and calculates elapsed time using `System.currentTimeMillis()`. This is completely independent of the server's tick rate (TPS).
+RankForge's `PlaytimeTracker` is a dedicated listener that records the exact moment each player joins and calculates elapsed time using `System.currentTimeMillis()`. This is completely independent of the server's tick rate (TPS), and is the foundation for the human-readable [Playtime Requirement Format](#playtime-requirement-format) used throughout `ranks.yml`.
 
-**Previous behaviour (v2.8 and earlier):**
+**Tick-based approximation (not used by `PlaytimeTracker`):**
 ```
 playtime = PLAY_ONE_MINUTE_stat / 1200   ← tick-based, affected by TPS drops
 ```
 
-**New behaviour (v2.8+):**
+**RankForge's wall-clock calculation:**
 ```
 playtime = (currentTimeMillis - joinTimeMillis) / 60_000   ← real wall-clock time
 ```
 
 **Why this matters:**
-- On a lagging server (10 TPS), the old system would credit only **10 minutes** for every 20 minutes of real time.
-- A server reboot or GC pause would skew the tick counter permanently.
+- On a lagging server (10 TPS), a tick-based system would credit only **10 minutes** for every 20 minutes of real time.
+- A server reboot or GC pause would skew a tick counter permanently.
 - `PlaytimeTracker` is immune to all of this — if a player is online for 60 real minutes, they earn exactly 60 minutes.
 
 ### Configuring `playtime`
@@ -2094,15 +2122,15 @@ ranks:
       block-breaks: 25000
 ```
 
-### Migration from v2.7
+### Behind the Scenes: Automatic Schema Handling
 
-No configuration changes are required. The `playtime` key in `ranks.yml` is identical. When upgrading:
+No manual configuration changes are ever required for playtime tracking. The `playtime` key in `ranks.yml` stays the same whether you use whole minutes or the new duration-string format:
 
-1. RankForge automatically migrates the YAML playerdata schema from v3 → v4, adding `playtime: 0` to all existing records.
-2. For MySQL, a `playtime_minutes` column is added automatically via `ALTER TABLE` on startup.
-3. All existing players start at `0` real minutes and accumulate from the point of upgrade onward.
+1. RankForge automatically keeps the YAML playerdata schema up to date, adding `playtime: 0` to any record that doesn't already have it.
+2. For MySQL, a `playtime_minutes` column is added automatically via `ALTER TABLE` on startup if it doesn't exist.
+3. Any player without existing wall-clock playtime data starts at `0` real minutes and accumulates from that point onward.
 
-> **Note:** Previous tick-based values are **not** converted. Servers that want to credit existing players for time already played can use an admin command or manually edit `playerdata.yml`. This is intentional — converting inaccurate tick counts would propagate the existing error.
+> **Note:** Legacy tick-based statistics are never used to back-fill wall-clock playtime. Servers that want to credit players for time already played can use an admin command or manually edit `playerdata.yml`. This is intentional — converting approximate tick counts would propagate their inaccuracy.
 
 ### Tips and Best Practices
 
@@ -2116,7 +2144,7 @@ No configuration changes are required. The `playtime` key in `ranks.yml` is iden
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| Playtime shows 0 after upgrade | Normal — existing data migrates to 0, accumulation begins fresh | No action needed; time will accumulate naturally |
+| Playtime shows 0 for an existing player | Normal for a record with no prior wall-clock data — accumulation begins fresh | No action needed; time will accumulate naturally |
 | Playtime not advancing | PlaytimeTracker not initialized | Check console for errors on startup; use `/rank version` to verify plugin loaded |
 | Playtime resets on relog | Data not saving before quit | Check storage errors in console; ensure `playerdata.yml` is writable |
 | Requirement shows wrong time | Stale cache | Run `/rank reload` to flush the cache |
@@ -2258,14 +2286,14 @@ A: It can. Always use `/rank reload` instead. The vanilla reload can corrupt in-
 
 ### Playtime
 
-**Q: How is playtime measured in v2.8?**
+**Q: How is playtime measured?**
 A: Using `System.currentTimeMillis()` — real wall-clock time measured in milliseconds and stored as whole minutes. This is completely independent of server TPS.
 
 **Q: Does playtime count while the player is AFK?**
 A: Yes, by default. The timer runs from join to quit regardless of activity. If you need AFK detection, use an external AFK plugin that disconnects inactive players, or gate progression on activity-based requirements like `block-breaks`.
 
-**Q: Why did all players reset to 0 playtime after upgrading?**
-A: This is expected. Previous versions used the vanilla `PLAY_ONE_MINUTE` statistic (tick-based). Those inaccurate values are not migrated to avoid propagating existing errors. Players accumulate accurate real-world playtime from the upgrade point onward.
+**Q: Why does a player show 0 playtime even though they've played before?**
+A: This happens if a player's record predates wall-clock tracking being enabled on your server. The vanilla `PLAY_ONE_MINUTE` statistic (tick-based) is intentionally not used to back-fill this value, since it can be skewed by lag. Playtime accumulates accurately from that point onward.
 
 **Q: What happens to playtime if the server crashes?**
 A: Playtime is periodically flushed to storage (every `sync.interval-ticks`, default 10 seconds). On a crash, up to 10 seconds of playtime may be lost. Clean shutdowns always flush everything before stopping.
@@ -2365,7 +2393,7 @@ Drop the JAR into your server's `plugins/` folder:
 ```
 server/
 └── plugins/
-    └── RankForge-2.8.jar
+    └── RankForge-3.0.jar
 ```
 
 #### Step 3 — Install optional dependencies
@@ -2460,7 +2488,7 @@ ranks:
     requirements:
       money: 1000
       xp-level: 10
-      playtime: 1hr               # New unified format (see Requirements Guide)
+      playtime: 1hr               # Human-readable duration format (see Requirements Guide)
       mob-kills: 50
       block-breaks: 500
       permission: "some.required.node"
@@ -2626,7 +2654,7 @@ requirements:
 
 The loader checks for `playtime` first; if absent, it falls back to `playtime`. No edits to existing `ranks.yml` files are required.
 
-**Full example rank using the new format:**
+**Full example rank using the duration format:**
 
 ```yaml
 ranks:
@@ -2681,6 +2709,7 @@ ranks:
 | `/rank delete <id>` | `rankforge.rank.delete` | Delete a rank (prompts for confirmation) |
 | `/rank set <player> <rank>` | `rankforge.rank.set` | Set a player's rank (online or offline) |
 | `/rank force <player> <rank>` | `rankforge.rank.force` | Force-set a rank bypassing all checks |
+| `/rank bypassreq <player> <requirement>` | `rankforge.rank.bypassreq` | Waive a single requirement for a player |
 | `/rank reset <player>` | `rankforge.rank.reset` | Reset a player to the default rank |
 | `/rank reload` | `rankforge.rank.reload` | Hot-reload all configuration files |
 | `/rank playerlist` | `rankforge.rank.playerlist` | Browse all player rank data in a GUI |
@@ -2710,6 +2739,7 @@ ranks:
 | `rankforge.rank.delete` | Delete ranks |
 | `rankforge.rank.set` | Set any player's rank |
 | `rankforge.rank.force` | Force-set a rank bypassing requirements |
+| `rankforge.rank.bypassreq` | Waive a single requirement for a player via `/rank bypassreq` |
 | `rankforge.rank.reset` | Reset any player to the default rank |
 | `rankforge.rank.reload` | Reload plugin configuration |
 | `rankforge.rank.playerlist` | Browse the player list GUI |
@@ -2751,7 +2781,7 @@ With PlaceholderAPI installed, all `%rankforge_*%` placeholders are available in
 | `%rankforge_player%` | `Steve` | Player's display name (Bedrock-safe) |
 | `%rankforge_uuid%` | `xxxxxxxx-...` | Player's UUID |
 | `%rankforge_lang%` | `en` | Player's active language code |
-| `%rankforge_version%` | `2.9` | Plugin version |
+| `%rankforge_version%` | `3.0` | Plugin version |
 
 ---
 

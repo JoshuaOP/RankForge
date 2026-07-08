@@ -2,6 +2,8 @@ package com.joshuaop.rankforge.tracker;
 
 import com.joshuaop.rankforge.RankForge;
 import com.joshuaop.rankforge.db.PlayerData;
+import org.bukkit.Material;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -10,7 +12,9 @@ import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
+import java.util.EnumSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -39,6 +43,17 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class BlockBreakTracker implements Listener {
 
+    /**
+     * Decorative grass-type plants that must not count as block breaks.
+     * These pass Material.isBlock() but are not real placeable blocks.
+     */
+    private static final Set<Material> DECORATIVE_GRASS = EnumSet.of(
+            Material.SHORT_GRASS,
+            Material.TALL_GRASS,
+            Material.FERN,
+            Material.LARGE_FERN
+    );
+
     private final RankForge                         plugin;
     private final ConcurrentHashMap<UUID, AtomicLong> counters = new ConcurrentHashMap<>();
 
@@ -50,6 +65,17 @@ public class BlockBreakTracker implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBlockBreak(BlockBreakEvent event) {
+        Block block = event.getBlock();
+        Material type = block.getType();
+
+        // Only count real, tangible blocks — not air, liquids, non-block materials,
+        // or decorative grass-type plants (SHORT_GRASS, TALL_GRASS, FERN, LARGE_FERN).
+        // isAir()   covers AIR, CAVE_AIR, and VOID_AIR.
+        // isBlock() is false for purely item-form materials (should never appear here,
+        //            but guards against synthetic events fired by other plugins).
+        // isLiquid() covers WATER, LAVA, and BUBBLE_COLUMN source/flowing variants.
+        if (type.isAir() || !type.isBlock() || block.isLiquid() || DECORATIVE_GRASS.contains(type)) return;
+
         Player player = event.getPlayer();
         // Silktouch and creative-mode blocks still count — this is a raw activity metric.
         // Servers that want to exclude creative can add a check here:

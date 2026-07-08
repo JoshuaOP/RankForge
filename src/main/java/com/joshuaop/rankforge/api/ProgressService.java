@@ -102,47 +102,68 @@ public class ProgressService {
         return getRequirementProgress(player, next);
     }
 
+    // ── Bypass helper ─────────────────────────────────────────────────────────
+
+    private boolean isBypassed(Player player, String type) {
+        var reg = plugin.getBypassRegistry();
+        return reg != null && reg.isBypassed(player.getUniqueId(), type);
+    }
+
     // ── Per-requirement collectors ─────────────────────────────────────────
 
     private void addMoney(Player player, RankModel next, List<RequirementProgress> out) {
         double required = next.getRequiredMoney();
         if (required <= 0) return;
-        double have = safeGetBalance(player);
-        double pct  = Math.min(100.0, (have / required) * 100.0);
+        double have        = safeGetBalance(player);
+        double pct         = Math.min(100.0, (have / required) * 100.0);
+        double displayHave = Math.min(have, required);
         out.add(new RequirementProgress("Money",
-                String.format("$%,.0f", have), String.format("$%,.0f", required), pct));
+                String.format("$%,.0f", displayHave), String.format("$%,.0f", required), pct));
     }
 
     private void addXpLevel(Player player, RankModel next, List<RequirementProgress> out) {
-        int required = next.getRequiredXpLevel();
+        int required    = next.getRequiredXpLevel();
         if (required <= 0) return;
-        int have = player.getLevel();
-        double pct = Math.min(100.0, ((double) have / required) * 100.0);
+        int have        = player.getLevel();
+        double pct      = Math.min(100.0, ((double) have / required) * 100.0);
+        int displayHave = Math.min(have, required);
         out.add(new RequirementProgress("XP Level",
-                String.valueOf(have), "Level " + required, pct));
+                String.valueOf(displayHave), "Level " + required, pct));
     }
 
     private void addBlockBreaks(Player player, RankModel next, List<RequirementProgress> out) {
         int required = next.getRequiredBlockBreaks();
         if (required <= 0) return;
+        if (isBypassed(player, "block-breaks")) {
+            out.add(new RequirementProgress("Block Breaks",
+                    String.format("%,d", (long) required), String.format("%,d", required), 100.0));
+            return;
+        }
         long have = 0L;
         if (plugin.getBlockBreakTracker() != null) {
             have = plugin.getBlockBreakTracker().getCount(player.getUniqueId());
         }
-        double pct = Math.min(100.0, ((double) have / required) * 100.0);
+        double pct        = Math.min(100.0, ((double) have / required) * 100.0);
+        long displayHave  = Math.min(have, (long) required);
         out.add(new RequirementProgress("Block Breaks",
-                String.format("%,d", have), String.format("%,d", required), pct));
+                String.format("%,d", displayHave), String.format("%,d", required), pct));
     }
 
     private void addMobKills(Player player, RankModel next, List<RequirementProgress> out) {
         int required = next.getRequiredMobKills();
         if (required <= 0) return;
+        if (isBypassed(player, "mob-kills")) {
+            out.add(new RequirementProgress("Mob Kills",
+                    String.format("%,d", required), String.format("%,d", required), 100.0));
+            return;
+        }
         int have = 0;
         try { have = player.getStatistic(Statistic.MOB_KILLS); }
         catch (Exception ignored) {}
-        double pct = Math.min(100.0, ((double) have / required) * 100.0);
+        double pct       = Math.min(100.0, ((double) have / required) * 100.0);
+        int displayHave  = Math.min(have, required);
         out.add(new RequirementProgress("Mob Kills",
-                String.format("%,d", have), String.format("%,d", required), pct));
+                String.format("%,d", displayHave), String.format("%,d", required), pct));
     }
 
     private void addPlaytime(Player player, RankModel next, List<RequirementProgress> out) {
@@ -152,22 +173,30 @@ public class ProgressService {
         if (plugin.getPlaytimeTracker() != null) {
             haveMin = plugin.getPlaytimeTracker().getPlayTime(player.getUniqueId());
         }
-        double pct = Math.min(100.0, ((double) haveMin / requiredMin) * 100.0);
+        double pct           = Math.min(100.0, ((double) haveMin / requiredMin) * 100.0);
+        long displayHaveMin  = Math.min(haveMin, requiredMin);
         out.add(new RequirementProgress("Playtime",
-                FormatUtil.formatTime(haveMin), FormatUtil.formatTime(requiredMin), pct));
+                FormatUtil.formatTime(displayHaveMin), FormatUtil.formatTime(requiredMin), pct));
     }
 
     private void addItems(Player player, RankModel next, List<RequirementProgress> out) {
         Map<String, Integer> required = next.getRequiredItems();
         if (required == null || required.isEmpty()) return;
+        boolean bypassed = isBypassed(player, "items");
         for (Map.Entry<String, Integer> entry : required.entrySet()) {
             try {
                 Material mat  = Material.valueOf(entry.getKey().toUpperCase());
-                int req       = entry.getValue();
-                int have      = FormatUtil.countItem(player, mat);
-                double pct    = req <= 0 ? 100.0 : Math.min(100.0, ((double) have / req) * 100.0);
+                int req         = entry.getValue();
+                if (bypassed) {
+                    out.add(new RequirementProgress("Item: " + FormatUtil.formatMaterial(mat),
+                            String.valueOf(req), String.valueOf(req), 100.0));
+                    continue;
+                }
+                int have        = FormatUtil.countItem(player, mat);
+                double pct      = req <= 0 ? 100.0 : Math.min(100.0, ((double) have / req) * 100.0);
+                int displayHave = req <= 0 ? have : Math.min(have, req);
                 out.add(new RequirementProgress("Item: " + FormatUtil.formatMaterial(mat),
-                        String.valueOf(have), String.valueOf(req), pct));
+                        String.valueOf(displayHave), String.valueOf(req), pct));
             } catch (IllegalArgumentException e) {
                 if (plugin.isDebug()) {
                     plugin.getLogger().warning("Unknown material in items requirement: "
@@ -180,6 +209,10 @@ public class ProgressService {
     private void addPermission(Player player, RankModel next, List<RequirementProgress> out) {
         String perm = next.getRequiredPermission();
         if (perm == null || perm.isBlank()) return;
+        if (isBypassed(player, "permission")) {
+            out.add(new RequirementProgress("Permission: " + perm, "§aGranted", "Granted", 100.0));
+            return;
+        }
         boolean has = player.hasPermission(perm);
         out.add(new RequirementProgress("Permission: " + perm,
                 has ? "§aGranted" : "§cMissing", "Granted", has ? 100.0 : 0.0));
@@ -188,8 +221,13 @@ public class ProgressService {
     private void addQuests(Player player, RankModel next, List<RequirementProgress> out) {
         List<String> quests = next.getRequiredQuests();
         if (quests == null || quests.isEmpty()) return;
+        boolean bypassed = isBypassed(player, "quests");
         for (String questId : quests) {
             if (questId == null || questId.isBlank()) continue;
+            if (bypassed) {
+                out.add(new RequirementProgress("Quest: " + questId, "§aCompleted", "Completed", 100.0));
+                continue;
+            }
             String node = "rankforge.quest.completed." + questId.toLowerCase();
             boolean done = player.hasPermission(node);
             out.add(new RequirementProgress("Quest: " + questId,
@@ -200,6 +238,11 @@ public class ProgressService {
     private void addWorlds(Player player, RankModel next, List<RequirementProgress> out) {
         List<String> worlds = next.getRequiredWorlds();
         if (worlds == null || worlds.isEmpty()) return;
+        if (isBypassed(player, "worlds")) {
+            String joined = String.join("/", worlds);
+            out.add(new RequirementProgress("World", joined, joined, 100.0));
+            return;
+        }
         String current = player.getWorld() != null ? player.getWorld().getName() : "";
         boolean ok = worlds.contains(current);
         out.add(new RequirementProgress("World",
@@ -210,6 +253,11 @@ public class ProgressService {
         String statId  = next.getRequiredStatisticId();
         int    reqVal  = next.getRequiredStatisticValue();
         if (statId == null || statId.isBlank() || reqVal <= 0) return;
+        if (isBypassed(player, "statistic")) {
+            out.add(new RequirementProgress("Stat: " + statId,
+                    String.format("%,d", reqVal), String.format("%,d", reqVal), 100.0));
+            return;
+        }
         try {
             Statistic stat = Statistic.valueOf(statId.toUpperCase());
             if (stat.getType() != Statistic.Type.UNTYPED) {
@@ -218,10 +266,11 @@ public class ProgressService {
                             + "' is not UNTYPED and cannot be read without a type parameter.");
                 return;
             }
-            int have = player.getStatistic(stat);
-            double pct = Math.min(100.0, ((double) have / reqVal) * 100.0);
+            int have        = player.getStatistic(stat);
+            double pct      = Math.min(100.0, ((double) have / reqVal) * 100.0);
+            int displayHave = Math.min(have, reqVal);
             out.add(new RequirementProgress("Stat: " + statId,
-                    String.format("%,d", have), String.format("%,d", reqVal), pct));
+                    String.format("%,d", displayHave), String.format("%,d", reqVal), pct));
         } catch (IllegalArgumentException e) {
             if (plugin.isDebug())
                 plugin.getLogger().warning("Unknown statistic '" + statId
@@ -241,9 +290,14 @@ public class ProgressService {
                 .getRankCustomRequirements(next.getId());
         if (rankReqs == null || rankReqs.isEmpty()) return;
 
+        boolean bypassed = isBypassed(player, "custom");
         for (Map.Entry<String, String> entry : rankReqs.entrySet()) {
             CustomRequirement req = registry.get(entry.getKey());
             if (req == null) continue;
+            if (bypassed) {
+                out.add(new RequirementProgress("Custom: " + entry.getKey(), "§aMet", "Met", 100.0));
+                continue;
+            }
             try {
                 boolean met = req.check(player, next, entry.getValue());
                 out.add(new RequirementProgress("Custom: " + entry.getKey(),
@@ -331,6 +385,17 @@ public class ProgressService {
             return icon + " §7" + label + ": §f" + current
                     + " §8/ §7" + required
                     + " §8[" + bar + "§8] §e" + String.format("%.0f", percent) + "§7%";
+        }
+
+        /**
+         * GUI-only variant: same as {@link #toDisplayLine()} but without the
+         * visual progress bar and percentage suffix.
+         */
+        public String toGuiDisplayLine() {
+            boolean met     = percent >= 100.0;
+            boolean started = percent > 0.0;
+            String  icon    = met ? "§a✔" : started ? "§e⏳" : "§c✘";
+            return icon + " §7" + label + ": §f" + current + " §8/ §7" + required;
         }
     }
 }

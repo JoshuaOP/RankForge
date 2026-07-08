@@ -71,6 +71,13 @@ public class RequirementManager {
         return unmet;
     }
 
+    // ── Bypass helper ─────────────────────────────────────────────────────────
+
+    private boolean isBypassed(Player player, String type) {
+        var reg = plugin.getBypassRegistry();
+        return reg != null && reg.isBypassed(player.getUniqueId(), type);
+    }
+
     // ── Built-in Checks ───────────────────────────────────────────────────────
 
     private void checkMoney(Player player, RankModel rank, List<String> unmet) {
@@ -92,6 +99,7 @@ public class RequirementManager {
     private void checkPermission(Player player, RankModel rank, List<String> unmet) {
         String perm = rank.getRequiredPermission();
         if (perm == null || perm.isBlank()) return;
+        if (isBypassed(player, "permission")) return;
         if (!player.hasPermission(perm))
             unmet.add("§7Permission: §c" + perm);
     }
@@ -117,6 +125,7 @@ public class RequirementManager {
             return;
         }
 
+        // Playtime is intentionally not bypassable — it is a lifetime cumulative statistic.
         long minutesPlayed = plugin.getPlaytimeTracker().getPlayTime(player.getUniqueId());
         if (minutesPlayed < requiredMinutes)
             unmet.add("§7Playtime: §c" + FormatUtil.formatTime(requiredMinutes)
@@ -126,6 +135,7 @@ public class RequirementManager {
     private void checkMobKills(Player player, RankModel rank, List<String> unmet) {
         int required = rank.getRequiredMobKills();
         if (required <= 0) return;
+        if (isBypassed(player, "mob-kills")) return;
         try {
             int kills = player.getStatistic(Statistic.MOB_KILLS);
             if (kills < required)
@@ -148,6 +158,7 @@ public class RequirementManager {
         int required = rank.getRequiredBlockBreaks();
         if (required <= 0) return;
 
+        if (isBypassed(player, "block-breaks")) return;
         long actual = 0L;
         if (plugin.getBlockBreakTracker() != null) {
             actual = plugin.getBlockBreakTracker().getCount(player.getUniqueId());
@@ -165,6 +176,7 @@ public class RequirementManager {
         String statId = rank.getRequiredStatisticId();
         int required  = rank.getRequiredStatisticValue();
         if (statId == null || statId.isBlank() || required <= 0) return;
+        if (isBypassed(player, "statistic")) return;
         try {
             Statistic stat = Statistic.valueOf(statId.toUpperCase());
             int current = 0;
@@ -192,6 +204,7 @@ public class RequirementManager {
     private void checkQuests(Player player, RankModel rank, List<String> unmet) {
         List<String> quests = rank.getRequiredQuests();
         if (quests == null || quests.isEmpty()) return;
+        if (isBypassed(player, "quests")) return;
         for (String questId : quests) {
             if (questId == null || questId.isBlank()) continue;
             String permNode = "rankforge.quest.completed." + questId.toLowerCase();
@@ -203,6 +216,7 @@ public class RequirementManager {
     private void checkWorlds(Player player, RankModel rank, List<String> unmet) {
         List<String> worlds = rank.getRequiredWorlds();
         if (worlds == null || worlds.isEmpty()) return;
+        if (isBypassed(player, "worlds")) return;
         if (player.getWorld() == null) return;
         String current = player.getWorld().getName();
         if (!worlds.contains(current))
@@ -213,6 +227,7 @@ public class RequirementManager {
     private void checkItems(Player player, RankModel rank, List<String> unmet) {
         Map<String, Integer> required = rank.getRequiredItems();
         if (required == null || required.isEmpty()) return;
+        if (isBypassed(player, "items")) return;
         for (Map.Entry<String, Integer> entry : required.entrySet()) {
             try {
                 Material mat   = Material.valueOf(entry.getKey().toUpperCase());
@@ -232,6 +247,7 @@ public class RequirementManager {
     private void checkCustom(Player player, RankModel rank, String rankId, List<String> unmet) {
         CustomRequirementRegistry registry = plugin.getCustomRequirementRegistry();
         if (registry == null || registry.getAll().isEmpty()) return;
+        if (isBypassed(player, "custom")) return;
 
         Map<String, String> rankReqs = rankCustomRequirements.get(rankId.toLowerCase());
         if (rankReqs == null || rankReqs.isEmpty()) return;

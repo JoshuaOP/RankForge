@@ -446,6 +446,14 @@ public class PlayerDataEditorGUI {
             plugin.getHistoryManager().clearHistory(targetUuid);
         }
 
+        // Clear any admin-granted /rank bypassreq completions — both the in-memory
+        // registry (used for live requirement checks) and the persisted record
+        // (already emptied by PlayerData.defaultData above, but this keeps runtime
+        // state consistent for online players without requiring a reconnect).
+        if (plugin.getBypassRegistry() != null) {
+            plugin.getBypassRegistry().clearAll(targetUuid);
+        }
+
         saveAndSync(reset);
         // Invalidate head cache for this player
         PlayerListGUI.invalidateHeadCache(targetUuid);

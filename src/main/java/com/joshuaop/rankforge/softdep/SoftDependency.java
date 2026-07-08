@@ -66,6 +66,12 @@ public class SoftDependency implements Listener {
                     "Repaired orphaned rank for " + player.getName() + " → '" + fallback + "'");
         }
 
+        // Restore any previously-persisted /rank bypassreq completions for this session
+        // (survives server restarts and reconnects — see BypassRegistry.loadPersisted).
+        if (plugin.getBypassRegistry() != null) {
+            plugin.getBypassRegistry().loadPersisted(uuid, data.completedRequirements());
+        }
+
         applyRankPermissions(player, data.rankId());
         plugin.getCosmeticManager().onLogin(player, data.rankId());
     }

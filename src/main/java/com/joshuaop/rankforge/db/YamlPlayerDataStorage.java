@@ -23,10 +23,12 @@ import java.util.UUID;
  *   v2 — experience, money, language fields
  *   v3 — adds block-breaks (BlockBreakTracker exact counter)
  *   v4 — adds playtime-minutes (real wall-clock playtime, not tick-based)
+ *   v5 — adds completed-requirements (requirement-type keys manually completed via
+ *        /rank bypassreq for the player's current rank; cleared automatically on rank-up)
  */
 public class YamlPlayerDataStorage {
 
-    private static final int CURRENT_DATA_VERSION = 4;
+    private static final int CURRENT_DATA_VERSION = 5;
 
     private final RankForge       plugin;
     private final File            dataFile;
@@ -68,6 +70,7 @@ public class YamlPlayerDataStorage {
         if (savedVersion < 2) migrateV1ToV2();
         if (savedVersion < 3) migrateV2ToV3();
         if (savedVersion < 4) migrateV3ToV4();
+        if (savedVersion < 5) migrateV4ToV5();
 
         yaml.set("data-version", CURRENT_DATA_VERSION);
         persist();
@@ -114,6 +117,21 @@ public class YamlPlayerDataStorage {
             if (!yaml.contains(path)) {
                 yaml.set(path, 0L);
                 count++;
+            }
+        }
+    }
+
+    /**
+     * v4 → v5: add completed-requirements field defaulting to an empty list for all
+     * existing entries. No conversion is required since this is a brand-new field.
+     */
+    private void migrateV4ToV5() {
+        ConfigurationSection players = yaml.getConfigurationSection("players");
+        if (players == null) return;
+        for (String uuidStr : players.getKeys(false)) {
+            String path = "players." + uuidStr + ".completed-requirements";
+            if (!yaml.contains(path)) {
+                yaml.set(path, new ArrayList<String>());
             }
         }
     }
@@ -186,11 +204,13 @@ public class YamlPlayerDataStorage {
         yaml.set(path + ".language",         data.language());
         yaml.set(path + ".block-breaks",     data.blockBreaks());
         yaml.set(path + ".playtime-minutes", data.playTime());
+        yaml.set(path + ".completed-requirements", new ArrayList<>(data.completedRequirements()));
     }
 
     private PlayerData fromSection(UUID uuid, ConfigurationSection s) {
         String defaultRank = plugin.getRankManager() != null
                 ? plugin.getRankManager().getDefaultRankId() : "Guest";
+        List<String> completedRequirements = s.getStringList("completed-requirements");
         return new PlayerData(
                 uuid,
                 s.getString("name",             "Unknown"),
@@ -199,7 +219,8 @@ public class YamlPlayerDataStorage {
                 s.getDouble("money",             0.0),
                 s.getString("language",          "en"),
                 s.getLong("block-breaks",        0L),
-                s.getLong("playtime-minutes",    0L)
+                s.getLong("playtime-minutes",    0L),
+                new java.util.LinkedHashSet<>(completedRequirements)
         );
     }
 
@@ -238,7 +259,8 @@ public class YamlPlayerDataStorage {
 
         return new PlayerData(
                 data.uuid(), player.getName(), data.rankId(),
-                liveXp, liveMoney, data.language(), liveBlocks, livePlaytime
+                liveXp, liveMoney, data.language(), liveBlocks, livePlaytime,
+                data.completedRequirements()
         );
     }
 }

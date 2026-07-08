@@ -174,7 +174,8 @@ public class CacheManager {
 
         return new PlayerData(
                 data.uuid(), player.getName(), data.rankId(),
-                liveXp, liveMoney, data.language(), liveBlockBreaks, livePlaytime
+                liveXp, liveMoney, data.language(), liveBlockBreaks, livePlaytime,
+                data.completedRequirements()
         );
     }
 }

@@ -105,6 +105,7 @@ public class RankCommand implements CommandExecutor, TabCompleter {
             s.sendMessage("  §c/rank force <player> <rank> §8— §7Force rank (no checks)");
             s.sendMessage("  §c/rank xp set <player> <amount> §8— §7Set player XP");
             s.sendMessage("  §c/rank xp add <player> <amount> §8— §7Add player XP");
+            s.sendMessage("  §c/rank bypassreq <player> <requirement> §8— §7Instantly complete a specific requirement for a player");
             s.sendMessage("  §c/rank reload §8— §7Full plugin reload");
             s.sendMessage("  §c/rank stats §8— §7System statistics");
             s.sendMessage("  §c/rank security §8— §7Anti-bypass status");
@@ -301,7 +302,7 @@ public class RankCommand implements CommandExecutor, TabCompleter {
             if (isMasterAdmin) {
                 subs.addAll(List.of("editor", "set", "reset", "force", "reload",
                         "debug", "stats", "security", "sound", "playerlist",
-                        "create", "delete", "remove"));
+                        "create", "delete", "remove", "bypassreq"));
             }
             return filter(subs, args[0]);
         }

@@ -15,6 +15,8 @@ import java.sql.Statement;
  *        rf_rank_log (id, uuid, from_rank, to_rank, ranked_at)
  *   v2 — rf_players + block_breaks BIGINT column (added via ALTER TABLE IF NOT EXISTS)
  *   v3 — rf_players + playtime_minutes BIGINT column (real wall-clock time, not ticks)
+ *   v4 — rf_players + completed_requirements TEXT column (comma-separated requirement-type
+ *        keys manually completed via /rank bypassreq for the player's current rank)
  */
 public class MySQLProvider {
 
@@ -35,6 +37,7 @@ public class MySQLProvider {
                     language          VARCHAR(8)   NOT NULL DEFAULT 'en',
                     block_breaks      BIGINT       NOT NULL DEFAULT 0,
                     playtime_minutes  BIGINT       NOT NULL DEFAULT 0,
+                    completed_requirements TEXT    NULL,
                     updated_at        TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
                         ON UPDATE CURRENT_TIMESTAMP
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -61,8 +64,9 @@ public class MySQLProvider {
         }
 
         // Safe column migrations for existing installations using INFORMATION_SCHEMA checks
-        addColumnIfMissing("rf_players", "block_breaks",     "BIGINT NOT NULL DEFAULT 0");
-        addColumnIfMissing("rf_players", "playtime_minutes", "BIGINT NOT NULL DEFAULT 0");
+        addColumnIfMissing("rf_players", "block_breaks",           "BIGINT NOT NULL DEFAULT 0");
+        addColumnIfMissing("rf_players", "playtime_minutes",       "BIGINT NOT NULL DEFAULT 0");
+        addColumnIfMissing("rf_players", "completed_requirements", "TEXT NULL");
     }
 
     /**

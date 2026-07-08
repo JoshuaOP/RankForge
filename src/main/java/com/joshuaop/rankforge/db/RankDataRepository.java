@@ -75,16 +75,17 @@ public class RankDataRepository {
     private void saveToMySQL(PlayerData data) {
         String sql = """
                 INSERT INTO rf_players
-                    (uuid, player_name, rank_id, experience, money, language, block_breaks, playtime_minutes)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    (uuid, player_name, rank_id, experience, money, language, block_breaks, playtime_minutes, completed_requirements)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
-                    player_name      = VALUES(player_name),
-                    rank_id          = VALUES(rank_id),
-                    experience       = VALUES(experience),
-                    money            = VALUES(money),
-                    language         = VALUES(language),
-                    block_breaks     = VALUES(block_breaks),
-                    playtime_minutes = VALUES(playtime_minutes)
+                    player_name            = VALUES(player_name),
+                    rank_id                = VALUES(rank_id),
+                    experience             = VALUES(experience),
+                    money                  = VALUES(money),
+                    language               = VALUES(language),
+                    block_breaks           = VALUES(block_breaks),
+                    playtime_minutes       = VALUES(playtime_minutes),
+                    completed_requirements = VALUES(completed_requirements)
                 """;
         try (Connection conn = db.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -96,6 +97,7 @@ public class RankDataRepository {
             ps.setString(6, data.language());
             ps.setLong(7,   data.blockBreaks());
             ps.setLong(8,   data.playTime());
+            ps.setString(9, String.join(",", data.completedRequirements()));
             ps.executeUpdate();
         } catch (SQLException e) {
             plugin.getLogger().warning("MySQL save failed for " + data.uuid() + ": " + e.getMessage());
@@ -144,6 +146,15 @@ public class RankDataRepository {
         try { playTime = rs.getLong("playtime_minutes"); }
         catch (SQLException ignored) {}
 
+        // completed_requirements may be absent in older databases before migration runs.
+        Set<String> completedRequirements = Set.of();
+        try {
+            String raw = rs.getString("completed_requirements");
+            if (raw != null && !raw.isBlank()) {
+                completedRequirements = new LinkedHashSet<>(Arrays.asList(raw.split(",")));
+            }
+        } catch (SQLException ignored) {}
+
         return new PlayerData(
                 UUID.fromString(rs.getString("uuid")),
                 rs.getString("player_name"),
@@ -152,7 +163,8 @@ public class RankDataRepository {
                 rs.getDouble("money"),
                 rs.getString("language"),
                 blockBreaks,
-                playTime
+                playTime,
+                completedRequirements
         );
     }
 }

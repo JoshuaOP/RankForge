@@ -38,6 +38,7 @@ public final class PermissionRegistry {
     public static final String XP_ADMIN     = BASE + ".rank.xp.admin";
     public static final String VERSION      = BASE + ".rank.system.version";
     public static final String PLAYER_LIST  = BASE + ".rank.playerlist";
+    public static final String BYPASS_REQ   = BASE + ".rank.bypassreq";
 
     /**
      * All static permission nodes iterated by {@link PermissionNodeGenerator} at startup.

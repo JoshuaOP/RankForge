@@ -67,13 +67,10 @@ public class AnimatedRankTreeGUI {
     private void buildPlayerHead(Inventory inv, Player player) {
         String cur      = getCurrentRankId(player);
         String nextId   = plugin.getRankManager().getNextRankId(cur);
-        double pct      = plugin.getApi().getProgress(player);
         String curName  = plugin.getRankManager().getDisplayName(cur);
         String nxtName  = (nextId == null || nextId.isBlank()) ? "§6§lMAX RANK"
                           : plugin.getRankManager().getDisplayName(nextId);
         double balance  = safeBalance(player);
-        String bar      = plugin.getApi().getProgressService().getProgressBar(player);
-        String pctColor = pct >= 100.0 ? "§a" : pct >= 50.0 ? "§e" : "§c";
 
         ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
         SkullMeta meta  = (SkullMeta) skull.getItemMeta();
@@ -146,7 +143,7 @@ public class AnimatedRankTreeGUI {
             lore.add("");
             lore.add("§8§m──────────────────────────");
             for (ProgressService.RequirementProgress rp : reqs) {
-                lore.add(rp.toDisplayLine());
+                lore.add(rp.toGuiDisplayLine());
             }
         }
 
@@ -189,17 +186,12 @@ public class AnimatedRankTreeGUI {
         catch (IllegalArgumentException e) { mat = Material.BOOK; }
 
         boolean canRankUp = plugin.getRequirementManager().meetsAll(player, nextRank.getId());
-        double  pct       = plugin.getApi().getProgressService().getPercent(player);
-        String  bar       = ProgressService.buildBar(pct, 20);
 
         ItemStack item = new ItemStack(canRankUp ? Material.EMERALD : mat);
         ItemMeta  meta = item.getItemMeta();
         if (meta != null) {
             meta.setDisplayName("§e§l➤ Next: " + nextRank.getDisplayName());
             List<String> lore = new ArrayList<>();
-            lore.add("");
-            lore.add("§7Overall progress:");
-            lore.add("§8 [" + bar + "§8] §e" + String.format("%.1f", pct) + "§7%");
             lore.add("");
             lore.add(canRankUp
                     ? "§a§l✔ Click the rank above to advance!"

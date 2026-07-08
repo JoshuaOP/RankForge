@@ -18,6 +18,7 @@ import com.joshuaop.rankforge.gui.GUIListener;
 import com.joshuaop.rankforge.lang.LangManager;
 import com.joshuaop.rankforge.manager.AnnouncementManager;
 import com.joshuaop.rankforge.manager.AntiBypassManager;
+import com.joshuaop.rankforge.manager.BypassRegistry;
 import com.joshuaop.rankforge.manager.GuiClickShieldManager;
 import com.joshuaop.rankforge.manager.RequirementManager;
 import com.joshuaop.rankforge.manager.SoundManager;
@@ -79,6 +80,9 @@ public final class RankForge extends JavaPlugin {
     // ── Experience & History ──────────────────────────────────────────────────
     private ExperienceManager         experienceManager;
     private RankHistoryManager        historyManager;
+
+    // ── Admin Bypass ──────────────────────────────────────────────────────────
+    private BypassRegistry            bypassRegistry;
 
     // ── Developer API Ecosystem ───────────────────────────────────────────────
     private CustomRequirementRegistry customRequirementRegistry;
@@ -189,6 +193,7 @@ public final class RankForge extends JavaPlugin {
         soundManager          = new SoundManager(this);
         announcementManager   = new AnnouncementManager(this);
         requirementManager    = new RequirementManager(this);
+        bypassRegistry        = new BypassRegistry();
         syncService           = new SyncService(this);
 
         performanceManager    = new PerformanceManager(this);
@@ -369,6 +374,7 @@ public final class RankForge extends JavaPlugin {
     public SoundManager                  getSoundManager()                 { return soundManager; }
     public AnnouncementManager           getAnnouncementManager()          { return announcementManager; }
     public RequirementManager            getRequirementManager()           { return requirementManager; }
+    public BypassRegistry                getBypassRegistry()               { return bypassRegistry; }
     public SoftDependency                getSoftDependency()               { return softDependency; }
     public PerformanceManager            getPerformanceManager()           { return performanceManager; }
     public TaskScheduler                 getTaskScheduler()                { return taskScheduler; }
