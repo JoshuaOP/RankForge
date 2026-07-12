@@ -6,7 +6,7 @@
 
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.17--1.21.4-brightgreen?style=for-the-badge&logo=minecraft)](https://www.minecraft.net/)
 [![Java](https://img.shields.io/badge/Java-21%2B-orange?style=for-the-badge&logo=openjdk)](https://adoptium.net/)
-[![Version](https://img.shields.io/badge/Version-3.0-purple?style=for-the-badge)](https://github.com/JoshuaOP/RankForge/releases)
+[![Version](https://img.shields.io/badge/Version-3.1-purple?style=for-the-badge)](https://github.com/JoshuaOP/RankForge/releases)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 [![bStats](https://img.shields.io/badge/bStats-31704-informational?style=for-the-badge)](https://bstats.org/plugin/bukkit/RankForge/31704)
 [![Issues](https://img.shields.io/github/issues/JoshuaOP/RankForge?style=for-the-badge)](https://github.com/JoshuaOP/RankForge/issues)
@@ -175,13 +175,13 @@ None. RankForge works out of the box with zero required dependencies.
 
 ## 🚀 Installation
 
-1. **Download** `RankForge-3.0.jar` from the [Spigot page](https://www.spigotmc.org/resources/%E2%9C%A6-rankforge-%E2%9A%A1.134929/).
+1. **Download** `RankForge-3.1.jar` from the [Spigot page](https://www.spigotmc.org/resources/%E2%9C%A6-rankforge-%E2%9A%A1.134929/).
 
 2. **Drop the JAR** into your `plugins/` directory:
    ```
    server/
    └── plugins/
-       └── RankForge-3.0.jar
+       └── RankForge-3.1.jar
    ```
 
 3. **(Optional)** Install Vault, LuckPerms, and/or PlaceholderAPI for extra features.
@@ -225,7 +225,7 @@ On first launch, RankForge:
    ```
    [RankForge] [SoftDep] Vault=✓  LuckPerms=✓  PlaceholderAPI=✓  Floodgate=✗
    [RankForge] [Lang] Dynamically indexed 4 language profiles: [en, es, fil, id]
-   [RankForge] RankForge v3.0 successfully loaded! (5 ranks compiled)
+   [RankForge] RankForge v3.1 successfully loaded! (5 ranks compiled)
    ```
 3. Connects to MySQL (if configured) or initializes the YAML storage fallback
 4. Starts the TPS monitor and performance evaluator
@@ -609,39 +609,48 @@ All commands use the `/rank` base (aliased as `/ranks`).
 
 ### Player Permissions
 
-| Permission Node | Default | Description |
-|----------------|---------|-------------|
-| `rankforge.rank.use` | `true` | Open the rank GUI (`/rank`) |
-| `rankforge.rank.up` | `true` | Use `/rank up` |
-| `rankforge.rank.progress` | `true` | Use `/rank progress` |
-| `rankforge.rank.next` | `true` | Use `/rank next` |
-| `rankforge.rank.current` | `true` | Use `/rank current` |
-| `rankforge.rank.requirements` | `true` | Use `/rank requirements` |
-| `rankforge.rank.history` | `true` | Use `/rank history` |
-| `rankforge.rank.lang` | `true` | Use `/rank lang` |
-| `rankforge.rank.system.version` | `true` | Use `/rank version` |
+| Permission | Default | Description |
+|---|---|---|
+| `rankforge.use.*` | `true` | Grants all player permissions (wildcard) |
+| `rankforge.use` | `true` | Open the rank GUI (`/rank`) |
+| `rankforge.use.up` | `true` | Rank up (`/rank up`) |
+| `rankforge.use.current` | `true` | View current rank (`/rank current`) |
+| `rankforge.use.next` | `true` | View next rank info (`/rank next`) |
+| `rankforge.use.progress` | `true` | View rank progress bar (`/rank progress`) |
+| `rankforge.use.requirements` | `true` | View rank requirements (`/rank requirements`) |
+| `rankforge.use.history` | `true` | View rank history (`/rank history`) |
+| `rankforge.use.help` | `true` | View command help (`/rank help`) |
+| `rankforge.use.lang` | `true` | Change language (`/rank lang`) |
+| `rankforge.use.version` | `true` | View plugin info (`/rank version`) |
+| `rankforge.use.xp` | `true` | View personal XP info (`/rank xp`) |
 
-### Admin Permissions
+### Administrator Permissions
 
-| Permission Node | Default | Description |
-|----------------|---------|-------------|
-| `rankforge.rank.editor` | `op` | Open and use the admin editor GUI |
-| `rankforge.rank.editor.save` | `op` | Save changes from the editor |
-| `rankforge.rank.editor.drag` | `op` | Use the drag-and-drop slot editor |
-| `rankforge.rank.create` | `op` | Create new ranks |
-| `rankforge.rank.delete` | `op` | Delete ranks |
-| `rankforge.rank.set` | `op` | Set any player's rank |
-| `rankforge.rank.force` | `op` | Force-set a rank without requirement checks |
-| `rankforge.rank.bypassreq` | `op` | Waive a single requirement for a player via `/rank bypassreq` |
-| `rankforge.rank.reset` | `op` | Reset a player's rank |
-| `rankforge.rank.xp.admin` | `op` | Modify tracked XP for players |
-| `rankforge.rank.playerlist` | `op` | Open the player list GUI |
-| `rankforge.rank.reload` | `op` | Reload the plugin |
-| `rankforge.rank.stats` | `op` | View system stats |
-| `rankforge.rank.security` | `op` | View anti-abuse status |
-| `rankforge.rank.debug` | `op` | View debug information |
-| `rankforge.rank.sound` | `op` | Test sounds |
-| `rankforge.*` | `op` | Wildcard — grants all permissions |
+| Permission | Default | Description |
+|---|---|---|
+| `rankforge.admin.*` | `op` | Grants all administrator permissions (wildcard) |
+| `rankforge.admin.reload` | `op` | Full plugin reload (`/rank reload`) |
+| `rankforge.admin.editor` | `op` | Open the admin rank editor (`/rank editor`) |
+| `rankforge.admin.playerlist` | `op` | View and edit all player data (`/rank playerlist`) |
+| `rankforge.admin.create` | `op` | Create a new rank (`/rank create`) |
+| `rankforge.admin.delete` | `op` | Delete a rank (`/rank delete`) |
+| `rankforge.admin.set` | `op` | Set a player's rank (`/rank set`) |
+| `rankforge.admin.force` | `op` | Force-set a rank bypassing requirements (`/rank force`) |
+| `rankforge.admin.reset` | `op` | Reset a player's rank (`/rank reset`) |
+| `rankforge.admin.bypassreq` | `op` | Instantly complete a requirement for a player (`/rank bypassreq`) |
+| `rankforge.admin.stats` | `op` | View system statistics (`/rank stats`) |
+| `rankforge.admin.debug` | `op` | View rank debug info (`/rank debug`) |
+| `rankforge.admin.security` | `op` | View anti-bypass status (`/rank security`) |
+| `rankforge.admin.sound` | `op` | Manage sound settings (`/rank sound`) |
+| `rankforge.admin.xp` | `op` | Set or add XP for other players (`/rank xp set\|add`) |
+
+### Wildcard Permissions
+
+| Permission | Default | Description |
+|---|---|---|
+| `rankforge.*` | `op` | Grants all RankForge permissions |
+| `rankforge.use.*` | `true` | Grants all player command permissions |
+| `rankforge.admin.*` | `op` | Grants all administrator command permissions |
 
 ### Quest Integration Permission
 
@@ -1065,7 +1074,7 @@ With PlaceholderAPI installed, RankForge registers all `%rankforge_*%` placehold
 | `%rankforge_player%` | `Steve` | Player's name |
 | `%rankforge_uuid%` | `xxxxxxxx-...` | Player's UUID |
 | `%rankforge_lang%` | `en` | Player's active language code |
-| `%rankforge_version%` | `3.0` | Plugin version |
+| `%rankforge_version%` | `3.1` | Plugin version |
 
 ### Scoreboard Example (CMI)
 
@@ -1309,7 +1318,7 @@ Plugin status and rank count.
 ```json
 {
   "plugin": "RankForge",
-  "version": "3.0",
+  "version": "3.1",
   "ranks": 5,
   "players": 12
 }
@@ -1408,7 +1417,7 @@ RankForge exposes a public API at `com.joshuaop.rankforge.api.RankForgeAPI`.
 <dependency>
   <groupId>com.github.JoshuaOP</groupId>
   <artifactId>RankForge</artifactId>
-  <version>3.0</version>
+  <version>3.1</version>
   <scope>provided</scope>
 </dependency>
 ```
@@ -1419,7 +1428,7 @@ repositories {
     maven { url 'https://jitpack.io' }
 }
 dependencies {
-    compileOnly 'com.github.JoshuaOP:RankForge:3.0'
+    compileOnly 'com.github.JoshuaOP:RankForge:3.1'
 }
 ```
 
@@ -1944,7 +1953,7 @@ A healthy startup looks like:
 [RankForge] [SoftDep] Vault=✓  LuckPerms=✓  PlaceholderAPI=✓  Floodgate=✗
 [RankForge] [Lang] Dynamically indexed 4 language profiles: [en, es, fil, id]
 [RankForge] [REST] API server listening on port 4567   ← (if enabled)
-[RankForge] RankForge v3.0 successfully loaded! (5 ranks compiled)
+[RankForge] RankForge v3.1 successfully loaded! (5 ranks compiled)
 ```
 
 If the rank count shows `(0 ranks compiled)`, `ranks.yml` failed to parse. Check for YAML syntax errors (indentation, missing colons, tab characters).
@@ -2393,7 +2402,7 @@ Drop the JAR into your server's `plugins/` folder:
 ```
 server/
 └── plugins/
-    └── RankForge-3.0.jar
+    └── RankForge-3.1.jar
 ```
 
 #### Step 3 — Install optional dependencies
@@ -2722,31 +2731,53 @@ ranks:
 
 ### 🔑 Permissions Guide
 
-| Permission | Description |
-|-----------|-------------|
-| `rankforge.rank.use` | Open the rank GUI and view XP |
-| `rankforge.rank.up` | Use `/rank up` to attempt rankup |
-| `rankforge.rank.progress` | View requirement progress |
-| `rankforge.rank.next` | View next rank |
-| `rankforge.rank.current` | View current rank |
-| `rankforge.rank.requirements` | List unmet requirements |
-| `rankforge.rank.history` | View own rank history |
-| `rankforge.rank.lang` | Change personal language |
-| `rankforge.rank.system.version` | View plugin version info |
-| `rankforge.rank.editor` | Access the admin rank editor GUI |
-| `rankforge.rank.editor.drag` | Access the drag-and-drop slot editor |
-| `rankforge.rank.create` | Create new ranks |
-| `rankforge.rank.delete` | Delete ranks |
-| `rankforge.rank.set` | Set any player's rank |
-| `rankforge.rank.force` | Force-set a rank bypassing requirements |
-| `rankforge.rank.bypassreq` | Waive a single requirement for a player via `/rank bypassreq` |
-| `rankforge.rank.reset` | Reset any player to the default rank |
-| `rankforge.rank.reload` | Reload plugin configuration |
-| `rankforge.rank.playerlist` | Browse the player list GUI |
-| `rankforge.rank.xp.set` | Set a player's custom XP |
-| `rankforge.rank.xp.add` | Add custom XP to a player |
-| `rankforge.rank.security` | View the anti-abuse audit log |
-| `rankforge.rank.admin` | General admin access (view other players' history) |
+#### Player Permissions
+
+| Permission | Default | Description |
+|-----------|---------|-------------|
+| `rankforge.use.*` | `true` | Grants all player permissions (wildcard) |
+| `rankforge.use` | `true` | Open the rank GUI (`/rank`) |
+| `rankforge.use.up` | `true` | Rank up (`/rank up`) |
+| `rankforge.use.current` | `true` | View current rank (`/rank current`) |
+| `rankforge.use.next` | `true` | View next rank info (`/rank next`) |
+| `rankforge.use.progress` | `true` | View rank progress bar (`/rank progress`) |
+| `rankforge.use.requirements` | `true` | View rank requirements (`/rank requirements`) |
+| `rankforge.use.history` | `true` | View rank history (`/rank history`) |
+| `rankforge.use.help` | `true` | View command help (`/rank help`) |
+| `rankforge.use.lang` | `true` | Change language (`/rank lang`) |
+| `rankforge.use.version` | `true` | View plugin version info (`/rank version`) |
+| `rankforge.use.xp` | `true` | View personal XP info (`/rank xp`) |
+
+#### Administrator Permissions
+
+| Permission | Default | Description |
+|-----------|---------|-------------|
+| `rankforge.admin.*` | `op` | Grants all admin permissions (wildcard) |
+| `rankforge.admin.reload` | `op` | Full plugin reload (`/rank reload`) |
+| `rankforge.admin.editor` | `op` | Open the admin rank editor (`/rank editor`) |
+| `rankforge.admin.playerlist` | `op` | View and edit all player data (`/rank playerlist`) |
+| `rankforge.admin.create` | `op` | Create a new rank (`/rank create`) |
+| `rankforge.admin.delete` | `op` | Delete a rank (`/rank delete`) |
+| `rankforge.admin.set` | `op` | Set a player's rank (`/rank set`) |
+| `rankforge.admin.force` | `op` | Force-set a rank bypassing requirements (`/rank force`) |
+| `rankforge.admin.reset` | `op` | Reset a player's rank (`/rank reset`) |
+| `rankforge.admin.bypassreq` | `op` | Instantly complete a requirement for a player (`/rank bypassreq`) |
+| `rankforge.admin.stats` | `op` | View system statistics (`/rank stats`) |
+| `rankforge.admin.debug` | `op` | View rank debug info (`/rank debug`) |
+| `rankforge.admin.security` | `op` | View anti-bypass status (`/rank security`) |
+| `rankforge.admin.sound` | `op` | Manage sound settings (`/rank sound`) |
+| `rankforge.admin.xp` | `op` | Set or add XP for other players (`/rank xp set\|add`) |
+
+#### Wildcard Permissions
+
+| Permission | Default | Description |
+|-----------|---------|-------------|
+| `rankforge.*` | `op` | Grants all RankForge permissions |
+| `rankforge.use.*` | `true` | Grants all player command permissions |
+| `rankforge.admin.*` | `op` | Grants all administrator command permissions |
+
+#### Quest Permission
+
 | `rankforge.quest.completed.<id>` | Marks a quest as complete for requirement checks |
 
 ---
@@ -2781,7 +2812,7 @@ With PlaceholderAPI installed, all `%rankforge_*%` placeholders are available in
 | `%rankforge_player%` | `Steve` | Player's display name (Bedrock-safe) |
 | `%rankforge_uuid%` | `xxxxxxxx-...` | Player's UUID |
 | `%rankforge_lang%` | `en` | Player's active language code |
-| `%rankforge_version%` | `3.0` | Plugin version |
+| `%rankforge_version%` | `3.1` | Plugin version |
 
 ---
 

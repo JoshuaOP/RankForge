@@ -9,6 +9,13 @@ import java.util.logging.Level;
 /**
  * Programmatically registers all RankForge permission nodes with the Bukkit plugin manager.
  * This runs at startup so permissions are available even before plugin.yml is fully parsed.
+ *
+ * <p>Defaults:
+ * <ul>
+ *   <li>All {@code rankforge.use.*} nodes — {@link PermissionDefault#TRUE}</li>
+ *   <li>All {@code rankforge.admin.*} nodes — {@link PermissionDefault#OP}</li>
+ *   <li>{@link PermissionRegistry#STAR} — {@link PermissionDefault#OP}</li>
+ * </ul>
  */
 public class PermissionNodeGenerator {
 
@@ -22,19 +29,45 @@ public class PermissionNodeGenerator {
      * Register all static permission nodes and one dynamic node per configured rank.
      */
     public void generateAll() {
-        int count = 0;
+        // Player nodes — default true
+        register(PermissionRegistry.USE_STAR,         PermissionDefault.TRUE);
+        register(PermissionRegistry.USE,              PermissionDefault.TRUE);
+        register(PermissionRegistry.USE_UP,           PermissionDefault.TRUE);
+        register(PermissionRegistry.USE_CURRENT,      PermissionDefault.TRUE);
+        register(PermissionRegistry.USE_NEXT,         PermissionDefault.TRUE);
+        register(PermissionRegistry.USE_PROGRESS,     PermissionDefault.TRUE);
+        register(PermissionRegistry.USE_REQUIREMENTS, PermissionDefault.TRUE);
+        register(PermissionRegistry.USE_HISTORY,      PermissionDefault.TRUE);
+        register(PermissionRegistry.USE_HELP,         PermissionDefault.TRUE);
+        register(PermissionRegistry.USE_LANG,         PermissionDefault.TRUE);
+        register(PermissionRegistry.USE_VERSION,      PermissionDefault.TRUE);
+        register(PermissionRegistry.USE_XP,           PermissionDefault.TRUE);
 
-        for (String node : PermissionRegistry.ALL_NODES) {
-            if (register(node, PermissionDefault.FALSE)) count++;
-        }
+        // Admin nodes — default op
+        register(PermissionRegistry.ADMIN_STAR,        PermissionDefault.OP);
+        register(PermissionRegistry.ADMIN_RELOAD,      PermissionDefault.OP);
+        register(PermissionRegistry.ADMIN_EDITOR,      PermissionDefault.OP);
+        register(PermissionRegistry.ADMIN_PLAYER_LIST, PermissionDefault.OP);
+        register(PermissionRegistry.ADMIN_CREATE,      PermissionDefault.OP);
+        register(PermissionRegistry.ADMIN_DELETE,      PermissionDefault.OP);
+        register(PermissionRegistry.ADMIN_SET,         PermissionDefault.OP);
+        register(PermissionRegistry.ADMIN_FORCE,       PermissionDefault.OP);
+        register(PermissionRegistry.ADMIN_RESET,       PermissionDefault.OP);
+        register(PermissionRegistry.ADMIN_BYPASSREQ,   PermissionDefault.OP);
+        register(PermissionRegistry.ADMIN_STATS,       PermissionDefault.OP);
+        register(PermissionRegistry.ADMIN_DEBUG,       PermissionDefault.OP);
+        register(PermissionRegistry.ADMIN_SECURITY,    PermissionDefault.OP);
+        register(PermissionRegistry.ADMIN_SOUND,       PermissionDefault.OP);
+        register(PermissionRegistry.ADMIN_XP,          PermissionDefault.OP);
 
+        // Top-level wildcard
         register(PermissionRegistry.STAR, PermissionDefault.OP);
 
+        // Dynamic per-rank permission nodes
         for (String rankId : plugin.getRankManager().getRankIds()) {
             String node = PermissionRegistry.BASE + ".rank." + rankId.toLowerCase();
-            if (register(node, PermissionDefault.FALSE)) count++;
+            register(node, PermissionDefault.FALSE);
         }
-
     }
 
     /**

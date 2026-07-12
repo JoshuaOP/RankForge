@@ -23,108 +23,130 @@ commands:
     usage: /rank [subcommand]
     aliases:
       - ranks
-    permission: rankforge.rank.use
+    permission: rankforge.use
 
 permissions:
+
+  # ── Top-level Wildcard ───────────────────────────────────────────────────────
   rankforge.*:
     description: Grants all RankForge permissions.
     default: op
     children:
-      rankforge.rank.use: true
-      rankforge.rank.up: true
-      rankforge.rank.progress: true
-      rankforge.rank.next: true
-      rankforge.rank.current: true
-      rankforge.rank.requirements: true
-      rankforge.rank.history: true
-      rankforge.rank.editor: true
-      rankforge.rank.editor.drag: true
-      rankforge.rank.create: true
-      rankforge.rank.delete: true
-      rankforge.rank.set: true
-      rankforge.rank.reset: true
-      rankforge.rank.force: true
-      rankforge.rank.lang: true
-      rankforge.rank.reload: true
-      rankforge.rank.debug: true
-      rankforge.rank.stats: true
-      rankforge.rank.security: true
-      rankforge.rank.sound: true
-      rankforge.rank.xp.admin: true
-      rankforge.rank.system.version: true
-      rankforge.rank.playerlist: true
+      rankforge.use.*: true
+      rankforge.admin.*: true
 
-  # ── Player Permissions ──────────────────────────────────────────────────────
-  rankforge.rank.use:
-    description: Open the rank GUI.
+  # ── Player Wildcard ──────────────────────────────────────────────────────────
+  rankforge.use.*:
+    description: Grants access to all player commands.
     default: true
-  rankforge.rank.up:
-    description: Attempt to rank up.
+    children:
+      rankforge.use: true
+      rankforge.use.up: true
+      rankforge.use.current: true
+      rankforge.use.next: true
+      rankforge.use.progress: true
+      rankforge.use.requirements: true
+      rankforge.use.history: true
+      rankforge.use.help: true
+      rankforge.use.lang: true
+      rankforge.use.version: true
+      rankforge.use.xp: true
+
+  # ── Player Permissions ───────────────────────────────────────────────────────
+  rankforge.use:
+    description: Open the rank GUI (/rank).
     default: true
-  rankforge.rank.progress:
-    description: View rank progress.
+  rankforge.use.up:
+    description: Rank up (/rank up).
     default: true
-  rankforge.rank.next:
-    description: View next rank info.
+  rankforge.use.current:
+    description: View current rank (/rank current).
     default: true
-  rankforge.rank.current:
-    description: View current rank.
+  rankforge.use.next:
+    description: View next rank info (/rank next).
     default: true
-  rankforge.rank.requirements:
-    description: View rank requirements.
+  rankforge.use.progress:
+    description: View rank progress bar (/rank progress).
     default: true
-  rankforge.rank.history:
-    description: View personal rank history.
+  rankforge.use.requirements:
+    description: View rank requirements (/rank requirements).
+    default: true
+  rankforge.use.history:
+    description: View personal rank history (/rank history).
+    default: true
+  rankforge.use.help:
+    description: View command help (/rank help).
+    default: true
+  rankforge.use.lang:
+    description: Change language setting (/rank lang).
+    default: true
+  rankforge.use.version:
+    description: View plugin version info (/rank version).
+    default: true
+  rankforge.use.xp:
+    description: View personal XP info (/rank xp).
     default: true
 
-  # ── Admin Permissions ───────────────────────────────────────────────────────
-  rankforge.rank.editor:
-    description: Open the admin rank editor GUI.
+  # ── Admin Wildcard ───────────────────────────────────────────────────────────
+  rankforge.admin.*:
+    description: Grants access to all administrator commands.
     default: op
-  rankforge.rank.editor.drag:
-    description: Open the drag-and-drop slot editor.
-    default: op
-  rankforge.rank.create:
-    description: Create a new rank via command or GUI.
-    default: op
-  rankforge.rank.delete:
-    description: Delete an existing rank via command or GUI.
-    default: op
-  rankforge.rank.set:
-    description: Set a player's rank.
-    default: op
-  rankforge.rank.reset:
-    description: Reset a player's rank.
-    default: op
-  rankforge.rank.force:
-    description: Force a player to a specific rank (no checks).
-    default: op
-  rankforge.rank.lang:
-    description: Manage personal language setting.
-    default: true
-  rankforge.rank.reload:
-    description: Reload RankForge configuration.
-    default: op
-  rankforge.rank.debug:
-    description: View debug info.
-    default: op
-  rankforge.rank.stats:
-    description: View system stats.
-    default: op
-  rankforge.rank.security:
-    description: View security/anti-bypass status.
-    default: op
-  rankforge.rank.sound:
-    description: Manage sound settings.
-    default: op
-  rankforge.rank.xp.admin:
-    description: Set or add XP for other players.
-    default: op
+    children:
+      rankforge.admin.reload: true
+      rankforge.admin.editor: true
+      rankforge.admin.playerlist: true
+      rankforge.admin.create: true
+      rankforge.admin.delete: true
+      rankforge.admin.set: true
+      rankforge.admin.force: true
+      rankforge.admin.reset: true
+      rankforge.admin.bypassreq: true
+      rankforge.admin.stats: true
+      rankforge.admin.debug: true
+      rankforge.admin.security: true
+      rankforge.admin.sound: true
+      rankforge.admin.xp: true
 
-  # ── System Permissions ──────────────────────────────────────────────────────
-  rankforge.rank.system.version:
-    description: View plugin version and soft-dependency status.
-    default: true
-  rankforge.rank.playerlist:
-    description: View and edit all player data via GUI.
+  # ── Admin Permissions ────────────────────────────────────────────────────────
+  rankforge.admin.reload:
+    description: Reload plugin configuration (/rank reload).
+    default: op
+  rankforge.admin.editor:
+    description: Open the admin rank editor (/rank editor).
+    default: op
+  rankforge.admin.playerlist:
+    description: View and edit all player data (/rank playerlist).
+    default: op
+  rankforge.admin.create:
+    description: Create a new rank (/rank create).
+    default: op
+  rankforge.admin.delete:
+    description: Delete a rank (/rank delete).
+    default: op
+  rankforge.admin.set:
+    description: Set a player's rank (/rank set).
+    default: op
+  rankforge.admin.force:
+    description: Force-set a rank bypassing requirements (/rank force).
+    default: op
+  rankforge.admin.reset:
+    description: Reset a player's rank (/rank reset).
+    default: op
+  rankforge.admin.bypassreq:
+    description: Instantly complete a requirement for a player (/rank bypassreq).
+    default: op
+  rankforge.admin.stats:
+    description: View system statistics (/rank stats).
+    default: op
+  rankforge.admin.debug:
+    description: View rank debug info (/rank debug).
+    default: op
+  rankforge.admin.security:
+    description: View anti-bypass status (/rank security).
+    default: op
+  rankforge.admin.sound:
+    description: Manage sound settings (/rank sound).
+    default: op
+  rankforge.admin.xp:
+    description: Set or add XP for other players (/rank xp set, /rank xp add).
     default: op

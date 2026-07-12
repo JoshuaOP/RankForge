@@ -3,12 +3,15 @@ package com.joshuaop.rankforge.command;
 import com.joshuaop.rankforge.RankForge;
 import com.joshuaop.rankforge.db.CacheManager;
 import com.joshuaop.rankforge.db.PlayerData;
+import com.joshuaop.rankforge.permission.PermissionRegistry;
 import org.bukkit.command.CommandSender;
 import java.util.Collection;
 
 /**
  * Handles /rank reload — performs a full plugin configuration reload.
  * Reloads config.yml, ranks.yml, lang files, and all dependent managers.
+ *
+ * Required permission: {@link PermissionRegistry#ADMIN_RELOAD} (rankforge.admin.reload)
  */
 public class RankReloadCommand {
 
@@ -19,7 +22,7 @@ public class RankReloadCommand {
     }
 
     public void handle(CommandSender sender) {
-        if (!sender.hasPermission("rankforge.rank.reload") && !sender.isOp()) {
+        if (!sender.hasPermission(PermissionRegistry.ADMIN_RELOAD) && !sender.isOp()) {
             if (sender instanceof org.bukkit.entity.Player p)
                 plugin.getLangManager().send(p, "no_permission");
             else

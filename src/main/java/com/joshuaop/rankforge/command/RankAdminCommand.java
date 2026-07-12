@@ -60,19 +60,19 @@ public class RankAdminCommand {
      */
     public boolean handle(CommandSender sender, String[] args) {
         return switch (args[0].toLowerCase()) {
-            case "editor"          -> { if (perm(sender, PermissionRegistry.EDITOR))      editorCmd.handle(sender, args); yield true; }
-            case "create"          -> { if (perm(sender, PermissionRegistry.CREATE))      requirePlayer(sender, p -> doCreate(p, args)); yield true; }
-            case "delete", "remove"-> { if (perm(sender, PermissionRegistry.DELETE))      requirePlayer(sender, p -> doDelete(p, args)); yield true; }
-            case "set"             -> { if (perm(sender, PermissionRegistry.SET))         doSet(sender, args); yield true; }
-            case "reset"           -> { if (perm(sender, PermissionRegistry.RESET))       doReset(sender, args); yield true; }
-            case "force"           -> { if (perm(sender, PermissionRegistry.FORCE))       doForce(sender, args); yield true; }
-            case "reload"          -> { if (perm(sender, PermissionRegistry.RELOAD))      reloadCmd.handle(sender); yield true; }
-            case "debug"           -> { requirePlayer(sender, p -> { if (perm(p, PermissionRegistry.DEBUG)) doDebug(p); }); yield true; }
-            case "stats"           -> { if (perm(sender, PermissionRegistry.STATS))       doStats(sender); yield true; }
-            case "security"        -> { if (perm(sender, PermissionRegistry.SECURITY))    doSecurity(sender); yield true; }
-            case "sound"           -> { requirePlayer(sender, p -> { if (perm(p, PermissionRegistry.SOUND)) doSound(p, args); }); yield true; }
-            case "playerlist"      -> { if (perm(sender, PermissionRegistry.PLAYER_LIST)) requirePlayer(sender, this::openPlayerList); yield true; }
-            case "bypassreq"       -> { if (perm(sender, PermissionRegistry.BYPASS_REQ))  doBypassReq(sender, args); yield true; }
+            case "editor"          -> { if (perm(sender, PermissionRegistry.ADMIN_EDITOR))      editorCmd.handle(sender, args); yield true; }
+            case "create"          -> { if (perm(sender, PermissionRegistry.ADMIN_CREATE))      requirePlayer(sender, p -> doCreate(p, args)); yield true; }
+            case "delete", "remove"-> { if (perm(sender, PermissionRegistry.ADMIN_DELETE))      requirePlayer(sender, p -> doDelete(p, args)); yield true; }
+            case "set"             -> { if (perm(sender, PermissionRegistry.ADMIN_SET))         doSet(sender, args); yield true; }
+            case "reset"           -> { if (perm(sender, PermissionRegistry.ADMIN_RESET))       doReset(sender, args); yield true; }
+            case "force"           -> { if (perm(sender, PermissionRegistry.ADMIN_FORCE))       doForce(sender, args); yield true; }
+            case "reload"          -> { if (perm(sender, PermissionRegistry.ADMIN_RELOAD))      reloadCmd.handle(sender); yield true; }
+            case "debug"           -> { requirePlayer(sender, p -> { if (perm(p, PermissionRegistry.ADMIN_DEBUG))    doDebug(p); }); yield true; }
+            case "stats"           -> { if (perm(sender, PermissionRegistry.ADMIN_STATS))       doStats(sender); yield true; }
+            case "security"        -> { if (perm(sender, PermissionRegistry.ADMIN_SECURITY))    doSecurity(sender); yield true; }
+            case "sound"           -> { requirePlayer(sender, p -> { if (perm(p, PermissionRegistry.ADMIN_SOUND))    doSound(p, args); }); yield true; }
+            case "playerlist"      -> { if (perm(sender, PermissionRegistry.ADMIN_PLAYER_LIST)) requirePlayer(sender, this::openPlayerList); yield true; }
+            case "bypassreq"       -> { if (perm(sender, PermissionRegistry.ADMIN_BYPASSREQ))   doBypassReq(sender, args); yield true; }
             default                -> false;
         };
     }
@@ -83,7 +83,7 @@ public class RankAdminCommand {
      * Caller must already verify that args[1] is "set" or "add" and args.length >= 4.
      */
     public void handleXpAdmin(CommandSender s, String[] args) {
-        if (!perm(s, PermissionRegistry.XP_ADMIN)) return;
+        if (!perm(s, PermissionRegistry.ADMIN_XP)) return;
 
         String targetName = args[2];
         if (!isValidPlayerName(targetName)) {

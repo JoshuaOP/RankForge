@@ -44,19 +44,25 @@ public class RankCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public boolean onCommand(CommandSender sender, Command cmd, String label, String[] args) {
-        if (args.length == 0) { requirePlayer(sender, this::openGui); return true; }
+        if (args.length == 0) { requirePlayer(sender, PermissionRegistry.USE, this::openGui); return true; }
 
         switch (args[0].toLowerCase()) {
             // ── Player commands ─────────────────────────────────────────────
-            case "up"           -> requirePlayer(sender, p -> plugin.getApi().rankUp(p));
-            case "progress"     -> requirePlayer(sender, this::showProgress);
-            case "next"         -> requirePlayer(sender, this::showNext);
-            case "current"      -> requirePlayer(sender, this::showCurrent);
-            case "requirements" -> requirePlayer(sender, this::showRequirements);
+            case "up"           -> requirePlayer(sender, PermissionRegistry.USE_UP,           p -> plugin.getApi().rankUp(p));
+            case "progress"     -> requirePlayer(sender, PermissionRegistry.USE_PROGRESS,     this::showProgress);
+            case "next"         -> requirePlayer(sender, PermissionRegistry.USE_NEXT,         this::showNext);
+            case "current"      -> requirePlayer(sender, PermissionRegistry.USE_CURRENT,      this::showCurrent);
+            case "requirements" -> requirePlayer(sender, PermissionRegistry.USE_REQUIREMENTS, this::showRequirements);
             case "help"         -> sendHelp(sender);
-            case "version"      -> versionCmd.handle(sender);
-            case "lang"         -> requirePlayer(sender, p -> doLang(p, args));
-            case "history"      -> requirePlayer(sender, this::showHistory);
+            case "version"      -> {
+                if (sender instanceof Player p && !p.hasPermission(PermissionRegistry.USE_VERSION)) {
+                    plugin.getLangManager().send(p, "no_permission");
+                } else {
+                    versionCmd.handle(sender);
+                }
+            }
+            case "lang"         -> requirePlayer(sender, PermissionRegistry.USE_LANG,         p -> doLang(p, args));
+            case "history"      -> requirePlayer(sender, PermissionRegistry.USE_HISTORY,      this::showHistory);
             case "xp"           -> doXp(sender, args);
             // ── Admin commands (delegated) ──────────────────────────────────
             default             -> {
@@ -70,6 +76,10 @@ public class RankCommand implements CommandExecutor, TabCompleter {
     // ── Help ──────────────────────────────────────────────────────────────────
 
     private void sendHelp(CommandSender s) {
+        if (s instanceof Player p && !p.hasPermission(PermissionRegistry.USE_HELP)) {
+            plugin.getLangManager().send(p, "no_permission");
+            return;
+        }
         s.sendMessage("§8§m                                                ");
         s.sendMessage("  §6§lRankForge §r§7— Command Help");
         s.sendMessage("§8§m                                                ");
@@ -84,8 +94,7 @@ public class RankCommand implements CommandExecutor, TabCompleter {
         s.sendMessage("  §e/rank version §8— §7Plugin & system info");
         s.sendMessage("  §e/rank lang <set|list|reset> §8— §7Change language");
 
-        boolean isAdmin = s.hasPermission(PermissionRegistry.EDITOR)
-                || s.hasPermission(PermissionRegistry.RELOAD)
+        boolean isAdmin = s.hasPermission(PermissionRegistry.ADMIN_STAR)
                 || s.isOp();
 
         if (isAdmin) {
@@ -208,7 +217,7 @@ public class RankCommand implements CommandExecutor, TabCompleter {
             }
         }
         // Player self-view
-        requirePlayer(s, this::showXpInfo);
+        requirePlayer(s, PermissionRegistry.USE_XP, this::showXpInfo);
     }
 
     private void showXpInfo(Player p) {
@@ -293,7 +302,7 @@ public class RankCommand implements CommandExecutor, TabCompleter {
 
     @Override
     public List<String> onTabComplete(CommandSender sender, Command cmd, String alias, String[] args) {
-        boolean isMasterAdmin = sender.hasPermission(PermissionRegistry.EDITOR) || sender.isOp();
+        boolean isMasterAdmin = sender.hasPermission(PermissionRegistry.ADMIN_STAR) || sender.isOp();
 
         if (args.length == 1) {
             List<String> subs = new ArrayList<>(List.of(
@@ -309,7 +318,10 @@ public class RankCommand implements CommandExecutor, TabCompleter {
 
         if (args.length == 2) {
             switch (args[0].toLowerCase()) {
-                case "xp"   -> { return filter(List.of("set", "add"), args[1]); }
+                case "xp" -> {
+                    // Admin sub-actions (set/add) are only shown to admins
+                    if (isMasterAdmin) return filter(List.of("set", "add"), args[1]);
+                }
                 case "lang"  -> { return filter(List.of("set", "list", "reset"), args[1]); }
                 default     -> {
                     if (isMasterAdmin) return adminCmd.tabComplete(sender, args);
@@ -350,9 +362,13 @@ public class RankCommand implements CommandExecutor, TabCompleter {
         return data != null ? data.rankId() : plugin.getRankManager().getDefaultRankId();
     }
 
-    private void requirePlayer(CommandSender s, Consumer<Player> action) {
+    private void requirePlayer(CommandSender s, String permission, Consumer<Player> action) {
         if (!(s instanceof Player p)) {
             s.sendMessage("§cThis command can only be run by a player.");
+            return;
+        }
+        if (!p.hasPermission(permission)) {
+            plugin.getLangManager().send(p, "no_permission");
             return;
         }
         action.accept(p);

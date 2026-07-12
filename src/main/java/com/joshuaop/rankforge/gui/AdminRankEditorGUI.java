@@ -1,6 +1,7 @@
 package com.joshuaop.rankforge.gui;
 
 import com.joshuaop.rankforge.RankForge;
+import com.joshuaop.rankforge.permission.PermissionRegistry;
 import com.joshuaop.rankforge.rank.RankModel;
 import com.joshuaop.rankforge.util.FormatUtil;
 import org.bukkit.Bukkit;
@@ -171,7 +172,7 @@ public class AdminRankEditorGUI {
     }
 
     private void handleReload(Player player) {
-        if (!player.hasPermission("rankforge.rank.reload")) {
+        if (!player.hasPermission(PermissionRegistry.ADMIN_RELOAD)) {
             plugin.getLangManager().send(player, "no_permission"); return;
         }
         plugin.getRankYamlManager().hotReload();
@@ -183,7 +184,7 @@ public class AdminRankEditorGUI {
     }
 
     private void handleCreateRank(Player player) {
-        if (!player.hasPermission("rankforge.rank.create")) {
+        if (!player.hasPermission(PermissionRegistry.ADMIN_CREATE)) {
             plugin.getLangManager().send(player, "no_permission"); return;
         }
         player.closeInventory();

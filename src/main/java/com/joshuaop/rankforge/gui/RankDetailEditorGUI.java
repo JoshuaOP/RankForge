@@ -1,6 +1,7 @@
 package com.joshuaop.rankforge.gui;
 
 import com.joshuaop.rankforge.RankForge;
+import com.joshuaop.rankforge.permission.PermissionRegistry;
 import com.joshuaop.rankforge.rank.RankModel;
 import com.joshuaop.rankforge.util.FormatUtil;
 import org.bukkit.Bukkit;
@@ -360,7 +361,7 @@ public class RankDetailEditorGUI {
     }
 
     private void handleReload(Player player) {
-        if (!player.hasPermission("rankforge.rank.reload")) {
+        if (!player.hasPermission(PermissionRegistry.ADMIN_RELOAD)) {
             plugin.getLangManager().send(player, "no_permission"); return;
         }
         plugin.getRankYamlManager().hotReload();
@@ -372,7 +373,7 @@ public class RankDetailEditorGUI {
     }
 
     private void handleDelete(Player player) {
-        if (!player.hasPermission("rankforge.rank.delete")) {
+        if (!player.hasPermission(PermissionRegistry.ADMIN_DELETE)) {
             plugin.getLangManager().send(player, "no_permission"); return;
         }
         String rankId = EDITING_RANK.get(player.getUniqueId());

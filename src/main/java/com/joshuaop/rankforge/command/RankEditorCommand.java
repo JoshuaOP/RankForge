@@ -4,6 +4,7 @@ import com.joshuaop.rankforge.RankForge;
 import com.joshuaop.rankforge.gui.AdminRankEditorGUI;
 import com.joshuaop.rankforge.gui.DragDropRankEditorGUI;
 import com.joshuaop.rankforge.gui.RankDetailEditorGUI;
+import com.joshuaop.rankforge.permission.PermissionRegistry;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
@@ -18,6 +19,8 @@ import org.bukkit.entity.Player;
  *
  * Ranks are saved automatically whenever any change is made.
  * There is no manual save command.
+ *
+ * Required permission: {@link PermissionRegistry#ADMIN_EDITOR} (rankforge.admin.editor)
  */
 public class RankEditorCommand {
 
@@ -33,7 +36,7 @@ public class RankEditorCommand {
             return;
         }
 
-        if (!player.hasPermission("rankforge.rank.editor")) {
+        if (!player.hasPermission(PermissionRegistry.ADMIN_EDITOR)) {
             plugin.getLangManager().send(player, "no_permission");
             return;
         }
@@ -62,7 +65,7 @@ public class RankEditorCommand {
     }
 
     private void handleReload(Player player) {
-        if (!player.hasPermission("rankforge.rank.reload")) {
+        if (!player.hasPermission(PermissionRegistry.ADMIN_RELOAD)) {
             plugin.getLangManager().send(player, "no_permission");
             return;
         }
