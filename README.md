@@ -203,6 +203,7 @@ None. RankForge works out of the box with zero required dependencies.
 plugins/
 └── RankForge/
     ├── config.yml          # Main settings (storage, cosmetics, performance, REST API…)
+    ├── gui.yml             # All GUI layout, appearance, and interaction settings
     ├── ranks.yml           # All rank definitions (requirements, rewards, GUI layout)
     └── lang/               # Language files
         ├── en.yml          # English (default)
@@ -2163,7 +2164,9 @@ No manual configuration changes are ever required for playtime tracking. The `pl
 
 ## 🖥️ GUI Configuration (`gui.yml`)
 
-All GUI layout, appearance, and slot settings are controlled by `plugins/RankForge/gui.yml`. The file is auto-generated on first run and supports full customization without editing Java code.
+All GUI layout, appearance, slot, and interaction settings are controlled by `plugins/RankForge/gui.yml`. The file is auto-generated on first run and supports full customization without editing Java code.
+
+> **Note for upgraders:** In previous versions, the `gui:` (rows) and `gui-click-shield:` sections lived in `config.yml`. They have moved to `gui.yml`. RankForge automatically migrates your existing values on first startup — no manual reconfiguration is required. If either section is missing from `gui.yml`, the plugin reads any custom value you had in `config.yml` and writes it to `gui.yml` transparently.
 
 ### File Location
 
@@ -2176,29 +2179,41 @@ plugins/
 ### Structure Overview
 
 ```yaml
-# Player-facing rank tree GUI (/rank)
+# ── GUI Window Size ────────────────────────────────────────────
+# Number of inventory rows in each GUI (1–6).
+gui:
+  rows: 6
+  admin-rows: 6
+
+# ── GUI Click Shield ───────────────────────────────────────────
+# Per-player cooldown that prevents click-spam inside any RankForge GUI.
+gui-click-shield:
+  enabled: true
+  cooldown-ms: 400   # Minimum ms between two accepted clicks per player
+
+# ── Player-facing rank tree GUI (/rank) ────────────────────────
 player-gui:
   title: "&8✦ &6RankForge &8✦"       # GUI window title
   border-material: CYAN_STAINED_GLASS_PANE  # Border block type
   head-slot: 4                         # Slot for the player's head item
   info-slot: 49                        # Slot for the info/progress item
 
-# Admin rank editor (/rank editor)
+# ── Admin rank editor (/rank editor) ──────────────────────────
 admin-gui:
   title: "&8✦ &cAdmin Rank Editor &8✦"
   border-material: RED_STAINED_GLASS_PANE
 
-# Per-rank detail editor (click a rank in the admin editor)
+# ── Per-rank detail editor (click a rank in the admin editor) ──
 detail-editor:
   title-prefix: "&8✦ &6Editing: "
   border-top: LIME_STAINED_GLASS_PANE
   border-bottom: GRAY_STAINED_GLASS_PANE
 
-# Drag-and-drop slot reassignment editor
+# ── Drag-and-drop slot reassignment editor ─────────────────────
 drag-drop:
   title: "&8✦ &bSlot Editor &8✦"
 
-# Player list GUI (/rank playerlist)
+# ── Player list GUI (/rank playerlist) ────────────────────────
 player-list:
   title: "&8✦ &9Player List &8✦"
   border-material: BLUE_STAINED_GLASS_PANE
@@ -2206,7 +2221,7 @@ player-list:
   close-slot: 49
   next-page-slot: 53
 
-# Player data editor (click a player in the player list)
+# ── Player data editor (click a player in the player list) ─────
 player-data-editor:
   title-prefix: "&8✦ &9Editing: "
   border-material: LIGHT_BLUE_STAINED_GLASS_PANE
@@ -2217,7 +2232,7 @@ player-data-editor:
     lore:
       - "&7Exact blocks broken (tracked by RankForge)."
 
-# Block-break stat panel settings
+# ── Block-break stat panel settings ───────────────────────────
 block-break-stats:
   show-in-rank-gui: true
   show-in-player-data-editor: true
@@ -2227,7 +2242,7 @@ block-break-stats:
   unmet-format: "&cNeed &e%required% &cblocks &8(have &7%current%&8)"
   met-format: "&a✔ &e%required% &ablocks broken"
 
-# Shared elements used across all GUIs
+# ── Shared elements used across all GUIs ─────────────────────
 common:
   filler-material: GRAY_STAINED_GLASS_PANE
   close-material: BARRIER
@@ -2235,14 +2250,14 @@ common:
   back-material: ARROW
   back-name: "&7Back"
 
-# Requirement status icons on the next-rank GUI item
+# ── Requirement status icons on the next-rank GUI item ────────
 requirement-icons:
   enabled: true
   met-symbol: "&a✔"
   unmet-symbol: "&c✘"
   show-details: true
 
-# GUI themes (border colors)
+# ── GUI themes (border colors) ────────────────────────────────
 themes:
   default:
     player-border: CYAN_STAINED_GLASS_PANE
@@ -2257,6 +2272,23 @@ themes:
     admin-border: ORANGE_STAINED_GLASS_PANE
     list-border: YELLOW_STAINED_GLASS_PANE
 ```
+
+### Key Sections
+
+| Section | Purpose |
+|---------|---------|
+| `gui` | Window row count for the player GUI and admin editor |
+| `gui-click-shield` | Per-player click cooldown to prevent inventory spam |
+| `player-gui` | Player-facing rank tree: title, border, slot positions |
+| `admin-gui` | Admin rank editor: title and border color |
+| `detail-editor` | Per-rank detail editor: title prefix and border colors |
+| `drag-drop` | Drag-and-drop slot editor title |
+| `player-list` | Player list GUI: title, border, pagination slot positions |
+| `player-data-editor` | Player data editor: title, border, and block-break display |
+| `block-break-stats` | How block-break counts appear across all GUIs |
+| `common` | Shared filler, close, and back button materials and labels |
+| `requirement-icons` | Met/unmet symbols on the next-rank item |
+| `themes` | Named border-color presets (active theme configurable per GUI) |
 
 ### Customization Tips
 

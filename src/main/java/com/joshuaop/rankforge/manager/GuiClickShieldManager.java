@@ -62,11 +62,11 @@ public class GuiClickShieldManager implements Listener {
     }
 
     public void reload() {
-        cooldownMs = plugin.getConfig().getLong("gui-click-shield.cooldown-ms", 400L);
+        cooldownMs = plugin.getGuiConfig().clickShieldCooldownMs();
     }
 
     public boolean isEnabled() {
-        return plugin.getConfig().getBoolean("gui-click-shield.enabled", true);
+        return plugin.getGuiConfig().clickShieldEnabled();
     }
 
     // ── Automated Memory Recovery ──────────────────────────────────────────────

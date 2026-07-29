@@ -460,7 +460,7 @@ public class RankAdminCommand {
         s.sendMessage("  §6§lRankForge §7Security");
         s.sendMessage("§8§m                                ");
         s.sendMessage("  §7Anti-bypass: §a" + plugin.getConfig().getBoolean("anti-bypass.enabled"));
-        s.sendMessage("  §7GUI shield:  §a" + plugin.getConfig().getBoolean("gui-click-shield.enabled"));
+        s.sendMessage("  §7GUI shield:  §a" + plugin.getGuiConfig().clickShieldEnabled());
         s.sendMessage("  §7Tracked:     §e" + plugin.getAntiBypassManager().getTrackedPlayers() + " §7players");
         s.sendMessage("§8§m                                ");
     }

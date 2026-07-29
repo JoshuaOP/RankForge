@@ -26,10 +26,6 @@ anti-bypass:
   enabled: true
   cooldown-ms: 2000
 
-gui-click-shield:
-  enabled: true
-  cooldown-ms: 400
-
 anti-abuse:
   enabled: true
   macro-threshold-ms: 20
@@ -83,11 +79,6 @@ performance:
   modes:
     high-tps-threshold: 18.0
     medium-tps-threshold: 14.0
-
-# ── GUI ───────────────────────────────────────────────────────────────────────
-gui:
-  rows: 6
-  admin-rows: 6
 
 # ── Data Sync & Cache ─────────────────────────────────────────────────────────
 sync:

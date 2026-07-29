@@ -1,9 +1,9 @@
 # ==============================================================================
-#   ✦ RankForge — GUI Configuration — v3.0 ✦
-#   All GUI layout, title, border, and slot settings live here.
+#   ✦ RankForge — GUI Configuration ✦
+#   All GUI layout, title, border, slot, and interaction settings live here.
 #   Use & color codes (&6=gold, &a=green, &c=red, &8=dark_grey, etc.)
 #   Material names must match Bukkit Material enum values (ALL_CAPS).
-#   Row count settings are in config.yml under the 'gui' section.
+#   Apply changes live with /rank reload — no server restart required.
 # ==============================================================================
 
 # ── Player-facing rank tree GUI  (/rank) ──────────────────────────────────────
@@ -76,6 +76,21 @@ block-break-stats:
   unmet-format: "&cNeed &e%required% &cblocks &8(have &7%current%&8)"
   # Shown in rank requirement list when the requirement is met.
   met-format: "&a✔ &e%required% &ablocks broken"
+
+# ── GUI Window Size ────────────────────────────────────────────────────────────
+# Number of inventory rows displayed in each GUI (minimum 1, maximum 6).
+gui:
+  rows: 6
+  admin-rows: 6
+
+# ── GUI Click Shield ───────────────────────────────────────────────────────────
+# Prevents click-spam inside any RankForge inventory by enforcing a per-player
+# atomic cooldown. Blocking duplicate events also prevents unintended double-actions
+# (e.g. accidentally opening two GUIs from a single fast double-click).
+gui-click-shield:
+  enabled: true
+  # Minimum milliseconds that must pass between two accepted clicks for the same player.
+  cooldown-ms: 400
 
 # ── Common Shared Window Elements ─────────────────────────────────────────────
 common:
