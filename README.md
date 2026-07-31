@@ -6,7 +6,7 @@
 
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.17--1.21.4-brightgreen?style=for-the-badge&logo=minecraft)](https://www.minecraft.net/)
 [![Java](https://img.shields.io/badge/Java-21%2B-orange?style=for-the-badge&logo=openjdk)](https://adoptium.net/)
-[![Version](https://img.shields.io/badge/Version-3.1-purple?style=for-the-badge)](https://github.com/JoshuaOP/RankForge/releases)
+[![Version](https://img.shields.io/badge/Version-3.2-purple?style=for-the-badge)](https://github.com/JoshuaOP/RankForge/releases)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 [![bStats](https://img.shields.io/badge/bStats-31704-informational?style=for-the-badge)](https://bstats.org/plugin/bukkit/RankForge/31704)
 [![Issues](https://img.shields.io/github/issues/JoshuaOP/RankForge?style=for-the-badge)](https://github.com/JoshuaOP/RankForge/issues)
@@ -175,13 +175,13 @@ None. RankForge works out of the box with zero required dependencies.
 
 ## 🚀 Installation
 
-1. **Download** `RankForge-3.1.jar` from the [Spigot page](https://www.spigotmc.org/resources/%E2%9C%A6-rankforge-%E2%9A%A1.134929/).
+1. **Download** `RankForge-3.2.jar` from the [Spigot page](https://www.spigotmc.org/resources/%E2%9C%A6-rankforge-%E2%9A%A1.134929/).
 
 2. **Drop the JAR** into your `plugins/` directory:
    ```
    server/
    └── plugins/
-       └── RankForge-3.1.jar
+       └── RankForge-3.2.jar
    ```
 
 3. **(Optional)** Install Vault, LuckPerms, and/or PlaceholderAPI for extra features.
@@ -226,7 +226,7 @@ On first launch, RankForge:
    ```
    [RankForge] [SoftDep] Vault=✓  LuckPerms=✓  PlaceholderAPI=✓  Floodgate=✗
    [RankForge] [Lang] Dynamically indexed 4 language profiles: [en, es, fil, id]
-   [RankForge] RankForge v3.1 successfully loaded! (5 ranks compiled)
+   [RankForge] RankForge v3.2 successfully loaded! (5 ranks compiled)
    ```
 3. Connects to MySQL (if configured) or initializes the YAML storage fallback
 4. Starts the TPS monitor and performance evaluator
@@ -1075,7 +1075,7 @@ With PlaceholderAPI installed, RankForge registers all `%rankforge_*%` placehold
 | `%rankforge_player%` | `Steve` | Player's name |
 | `%rankforge_uuid%` | `xxxxxxxx-...` | Player's UUID |
 | `%rankforge_lang%` | `en` | Player's active language code |
-| `%rankforge_version%` | `3.1` | Plugin version |
+| `%rankforge_version%` | `3.2` | Plugin version |
 
 ### Scoreboard Example (CMI)
 
@@ -1319,7 +1319,7 @@ Plugin status and rank count.
 ```json
 {
   "plugin": "RankForge",
-  "version": "3.1",
+  "version": "3.2",
   "ranks": 5,
   "players": 12
 }
@@ -1418,7 +1418,7 @@ RankForge exposes a public API at `com.joshuaop.rankforge.api.RankForgeAPI`.
 <dependency>
   <groupId>com.github.JoshuaOP</groupId>
   <artifactId>RankForge</artifactId>
-  <version>3.1</version>
+  <version>3.2</version>
   <scope>provided</scope>
 </dependency>
 ```
@@ -1429,7 +1429,7 @@ repositories {
     maven { url 'https://jitpack.io' }
 }
 dependencies {
-    compileOnly 'com.github.JoshuaOP:RankForge:3.1'
+    compileOnly 'com.github.JoshuaOP:RankForge:3.2'
 }
 ```
 
@@ -1954,7 +1954,7 @@ A healthy startup looks like:
 [RankForge] [SoftDep] Vault=✓  LuckPerms=✓  PlaceholderAPI=✓  Floodgate=✗
 [RankForge] [Lang] Dynamically indexed 4 language profiles: [en, es, fil, id]
 [RankForge] [REST] API server listening on port 4567   ← (if enabled)
-[RankForge] RankForge v3.1 successfully loaded! (5 ranks compiled)
+[RankForge] RankForge v3.2 successfully loaded! (5 ranks compiled)
 ```
 
 If the rank count shows `(0 ranks compiled)`, `ranks.yml` failed to parse. Check for YAML syntax errors (indentation, missing colons, tab characters).
@@ -2434,7 +2434,7 @@ Drop the JAR into your server's `plugins/` folder:
 ```
 server/
 └── plugins/
-    └── RankForge-3.1.jar
+    └── RankForge-3.2.jar
 ```
 
 #### Step 3 — Install optional dependencies
@@ -2844,7 +2844,7 @@ With PlaceholderAPI installed, all `%rankforge_*%` placeholders are available in
 | `%rankforge_player%` | `Steve` | Player's display name (Bedrock-safe) |
 | `%rankforge_uuid%` | `xxxxxxxx-...` | Player's UUID |
 | `%rankforge_lang%` | `en` | Player's active language code |
-| `%rankforge_version%` | `3.1` | Plugin version |
+| `%rankforge_version%` | `3.2` | Plugin version |
 
 ---
 
