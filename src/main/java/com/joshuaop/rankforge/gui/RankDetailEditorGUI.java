@@ -79,7 +79,7 @@ public class RankDetailEditorGUI {
             return false;
         }
 
-        String title = "§8✦ §6Editing: §e" + rank.getDisplayName() + " §8✦";
+        String title = plugin.getGuiConfig().detailTitlePrefix() + "§e" + rank.getDisplayName() + " §8✦";
         Inventory inv = Bukkit.createInventory(null, 54, title);
 
         buildBorder(inv);

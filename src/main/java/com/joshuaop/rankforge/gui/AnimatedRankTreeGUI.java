@@ -45,7 +45,7 @@ public class AnimatedRankTreeGUI {
     }
 
     public void open(Player player) {
-        Inventory inv = Bukkit.createInventory(null, 54, TITLE);
+        Inventory inv = Bukkit.createInventory(null, 54, plugin.getGuiConfig().playerTitle());
 
         buildBorder(inv);
         buildPlayerHead(inv, player);

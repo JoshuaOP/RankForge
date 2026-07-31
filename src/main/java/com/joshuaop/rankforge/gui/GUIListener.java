@@ -29,14 +29,16 @@ public class GUIListener implements Listener {
         if (!(event.getWhoClicked() instanceof Player player)) return;
 
         String title = event.getView().getTitle();
-        
-        // Determine targets safely
-        boolean isRank       = AnimatedRankTreeGUI.TITLE.equals(title);
-        boolean isAdmin      = AdminRankEditorGUI.TITLE.equals(title);
-        boolean isDrag       = DragDropRankEditorGUI.TITLE.equals(title);
-        boolean isDetail     = RankDetailEditorGUI.matchesTitle(title);
-        boolean isPlayerList = PlayerListGUI.TITLE.equals(title); // Fixed: Matches structural static TITLE string
-        boolean isPlayerData = PlayerDataEditorGUI.matchesTitle(title);
+        GUIConfig gc = plugin.getGuiConfig();
+
+        // Determine targets safely — resolved from gui.yml at event time so
+        // titles updated via /rank reload are always matched correctly.
+        boolean isRank       = gc.playerTitle().equals(title);
+        boolean isAdmin      = gc.adminTitle().equals(title);
+        boolean isDrag       = gc.dragDropTitle().equals(title);
+        boolean isDetail     = title != null && title.startsWith(gc.detailTitlePrefix());
+        boolean isPlayerList = gc.playerListTitle().equals(title);
+        boolean isPlayerData = title != null && title.startsWith(gc.playerDataEditorTitlePrefix());
 
         if (!isRank && !isAdmin && !isDrag && !isDetail && !isPlayerList && !isPlayerData) return;
 
@@ -80,12 +82,13 @@ public class GUIListener implements Listener {
         String title = event.getView().getTitle();
         UUID uuid = player.getUniqueId();
 
-        if (AnimatedRankTreeGUI.TITLE.equals(title))    AnimatedRankTreeGUI.setClosed(uuid);
-        if (AdminRankEditorGUI.TITLE.equals(title))     AdminRankEditorGUI.setClosed(uuid);
-        if (DragDropRankEditorGUI.TITLE.equals(title))  DragDropRankEditorGUI.setClosed(uuid);
-        if (RankDetailEditorGUI.matchesTitle(title))    RankDetailEditorGUI.setClosed(uuid);
-        if (PlayerListGUI.TITLE.equals(title))          PlayerListGUI.closeFor(uuid);
-        if (PlayerDataEditorGUI.matchesTitle(title))    PlayerDataEditorGUI.setClosed(uuid);
+        GUIConfig gc = plugin.getGuiConfig();
+        if (gc.playerTitle().equals(title))                                  AnimatedRankTreeGUI.setClosed(uuid);
+        if (gc.adminTitle().equals(title))                                   AdminRankEditorGUI.setClosed(uuid);
+        if (gc.dragDropTitle().equals(title))                                DragDropRankEditorGUI.setClosed(uuid);
+        if (title != null && title.startsWith(gc.detailTitlePrefix()))       RankDetailEditorGUI.setClosed(uuid);
+        if (gc.playerListTitle().equals(title))                              PlayerListGUI.closeFor(uuid);
+        if (title != null && title.startsWith(gc.playerDataEditorTitlePrefix())) PlayerDataEditorGUI.setClosed(uuid);
     }
 
     // ── Chat-based editing ────────────────────────────────────────────────────

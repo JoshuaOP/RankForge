@@ -88,10 +88,10 @@ public class RankEditor {
         for (Player onlineAdmin : Bukkit.getOnlinePlayers()) {
             String title = onlineAdmin.getOpenInventory().getTitle();
 
-            if (PlayerDataEditorGUI.matchesTitle(title)) {
+            if (title != null && title.startsWith(plugin.getGuiConfig().playerDataEditorTitlePrefix())) {
                 UUID adminUuid = onlineAdmin.getUniqueId();
                 if (PlayerDataEditorGUI.isOpen(adminUuid)) {
-                    String targetName = title.substring(PlayerDataEditorGUI.TITLE_PREFIX.length());
+                    String targetName = title.substring(plugin.getGuiConfig().playerDataEditorTitlePrefix().length());
                     Player targetPlayer = Bukkit.getPlayerExact(targetName);
                     if (targetPlayer != null) {
                         new PlayerDataEditorGUI(plugin).open(onlineAdmin, targetPlayer.getUniqueId(), targetName);

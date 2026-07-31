@@ -41,7 +41,7 @@ public class DragDropRankEditorGUI {
     }
 
     public void open(Player player) {
-        Inventory inv = Bukkit.createInventory(null, 54, TITLE);
+        Inventory inv = Bukkit.createInventory(null, 54, plugin.getGuiConfig().dragDropTitle());
         renderAll(inv);
 
         plugin.getSoundManager().playOpen(player);

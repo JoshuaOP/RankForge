@@ -34,7 +34,7 @@ public class AdminRankEditorGUI {
     }
 
     public void open(Player player) {
-        Inventory inv = Bukkit.createInventory(null, 54, TITLE);
+        Inventory inv = Bukkit.createInventory(null, 54, plugin.getGuiConfig().adminTitle());
 
         buildBorder(inv);
         buildRankList(inv);

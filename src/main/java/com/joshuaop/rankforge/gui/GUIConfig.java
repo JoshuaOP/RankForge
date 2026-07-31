@@ -54,6 +54,9 @@ public class GUIConfig {
     // ── Drag-Drop GUI ─────────────────────────────────────────────────────────
     public String   dragDropTitle()       { return c(cfg.getString("drag-drop.title",              "&8✦ &bSlot Editor &8✦")); }
 
+    // ── Player Data Editor GUI ────────────────────────────────────────────────
+    public String   playerDataEditorTitlePrefix() { return c(cfg.getString("player-data-editor.title-prefix", "&8✦ &9Editing: ")); }
+
     // ── Player List GUI ───────────────────────────────────────────────────────
     public String   playerListTitle()     { return c(cfg.getString("player-list.title",            "&8✦ &9Player List &8✦")); }
     public Material playerListBorder()    { return m(cfg.getString("player-list.border-material",  "BLUE_STAINED_GLASS_PANE")); }

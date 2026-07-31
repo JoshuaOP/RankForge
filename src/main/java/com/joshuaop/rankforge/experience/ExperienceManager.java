@@ -185,7 +185,7 @@ public class ExperienceManager {
         for (Player onlineAdmin : Bukkit.getOnlinePlayers()) {
             String title = onlineAdmin.getOpenInventory().getTitle();
             
-            if (PlayerDataEditorGUI.matchesTitle(title) && title.endsWith(target.getName())) {
+            if (title != null && title.startsWith(plugin.getGuiConfig().playerDataEditorTitlePrefix()) && title.endsWith(target.getName())) {
                 if (PlayerDataEditorGUI.isOpen(onlineAdmin.getUniqueId())) {
                     new PlayerDataEditorGUI(plugin).open(onlineAdmin, target.getUniqueId(), target.getName());
                 }

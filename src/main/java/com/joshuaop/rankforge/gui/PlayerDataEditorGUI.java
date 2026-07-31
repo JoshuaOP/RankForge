@@ -70,7 +70,7 @@ public class PlayerDataEditorGUI {
             return;
         }
 
-        Inventory inv = Bukkit.createInventory(null, 54, TITLE_PREFIX + safeName);
+        Inventory inv = Bukkit.createInventory(null, 54, plugin.getGuiConfig().playerDataEditorTitlePrefix() + safeName);
         buildBorder(inv);
         buildPlayerHead(inv, targetUuid, safeName, data);
         buildFields(inv, data);

@@ -66,7 +66,7 @@ public class PlayerListGUI {
 
         PAGE_MAP.put(admin.getUniqueId(), safePage);
 
-        Inventory inv = Bukkit.createInventory(null, INV_SIZE, TITLE);
+        Inventory inv = Bukkit.createInventory(null, INV_SIZE, plugin.getGuiConfig().playerListTitle());
         populatePlayers(inv, allPlayers, safePage);
         buildNavigation(inv, safePage, totalPages, allPlayers.size());
 
