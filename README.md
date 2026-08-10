@@ -8,7 +8,6 @@
 [![Java](https://img.shields.io/badge/Java-21%2B-orange?style=for-the-badge&logo=openjdk)](https://adoptium.net/)
 [![Version](https://img.shields.io/badge/Version-3.4-purple?style=for-the-badge)](https://github.com/JoshuaOP/RankForge/releases)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
-[![bStats](https://img.shields.io/badge/bStats-31704-informational?style=for-the-badge)](https://bstats.org/plugin/bukkit/RankForge/31704)
 [![Issues](https://img.shields.io/github/issues/JoshuaOP/RankForge?style=for-the-badge)](https://github.com/JoshuaOP/RankForge/issues)
 
 <br/>
@@ -131,7 +130,6 @@ RankForge handles the entire lifecycle of rank progression:
 - ⚡ **TPS-Aware Performance** — Automatically degrades heavy effects under server load
 - 🛡️ **Anti-Abuse** — Macro detection, command rate limiting, admin rollback tracking
 - 🎮 **Crossplay** — Native Geyser/Floodgate Bedrock prefix stripping
-- 📊 **bStats** — Anonymous usage metrics (plugin ID `31704`)
 
 </details>
 
