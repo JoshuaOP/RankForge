@@ -6,7 +6,7 @@
 
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.20+-brightgreen?style=for-the-badge&logo=minecraft)](https://www.minecraft.net/)
 [![Java](https://img.shields.io/badge/Java-21%2B-orange?style=for-the-badge&logo=openjdk)](https://adoptium.net/)
-[![Version](https://img.shields.io/badge/Version-3.3-purple?style=for-the-badge)](https://github.com/JoshuaOP/RankForge/releases)
+[![Version](https://img.shields.io/badge/Version-3.4-purple?style=for-the-badge)](https://github.com/JoshuaOP/RankForge/releases)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 [![bStats](https://img.shields.io/badge/bStats-31704-informational?style=for-the-badge)](https://bstats.org/plugin/bukkit/RankForge/31704)
 [![Issues](https://img.shields.io/github/issues/JoshuaOP/RankForge?style=for-the-badge)](https://github.com/JoshuaOP/RankForge/issues)
@@ -40,6 +40,7 @@
 - [📋 Rank Requirements](#-rank-requirements)
 - [🎁 Rank Rewards](#-rank-rewards)
 - [🖥️ GUI System](#️-gui-system)
+- [🖥️ GUI Configuration (gui.yml)](#️-gui-configuration-guiyml)
 - [💄 Cosmetics](#-cosmetics)
 - [📊 PlaceholderAPI Support](#-placeholderapi-support)
 - [💳 Vault Economy Integration](#-vault-economy-integration)
@@ -60,8 +61,6 @@
 - [💬 Support](#-support)
 - [📄 License](#-license)
 - [🙏 Credits](#-credits)
-- [⏱️ Real Playtime Tracking](#️-real-playtime-tracking-v28)
-- [🖥️ GUI Configuration (gui.yml)](#️-gui-configuration-guiyml)
 - [❓ Frequently Asked Questions (Extended)](#-frequently-asked-questions-1)
 - [🔧 Troubleshooting (Extended)](#-troubleshooting-1)
 
@@ -175,13 +174,13 @@ None. RankForge works out of the box with zero required dependencies.
 
 ## 🚀 Installation
 
-1. **Download** `RankForge-3.3.jar` from the [Spigot page](https://www.spigotmc.org/resources/%E2%9C%A6-rankforge-%E2%9A%A1.134929/).
+1. **Download** `RankForge-3.4.jar` from the [Spigot page](https://www.spigotmc.org/resources/%E2%9C%A6-rankforge-%E2%9A%A1.134929/).
 
 2. **Drop the JAR** into your `plugins/` directory:
    ```
    server/
    └── plugins/
-       └── RankForge-3.3.jar
+       └── RankForge-3.4.jar
    ```
 
 3. **(Optional)** Install Vault, LuckPerms, and/or PlaceholderAPI for extra features.
@@ -213,7 +212,7 @@ plugins/
 ```
 
 > [!NOTE]
-> Player data is stored in a MySQL database (if configured) or in-memory with a YAML fallback file. There is no separate `data.yml` to manage manually — the plugin handles all persistence automatically.
+> Player data is stored in a MySQL database (if configured) or in-memory with a YAML fallback file. There is no separate `playerdata.yml` to manage manually — the plugin handles all persistence automatically.
 
 ---
 
@@ -226,7 +225,7 @@ On first launch, RankForge:
    ```
    [RankForge] [SoftDep] Vault=✓  LuckPerms=✓  PlaceholderAPI=✓  Floodgate=✗
    [RankForge] [Lang] Dynamically indexed 4 language profiles: [en, es, fil, id]
-   [RankForge] RankForge v3.3 successfully loaded! (5 ranks compiled)
+   [RankForge] RankForge v3.4 successfully loaded! (5 ranks compiled)
    ```
 3. Connects to MySQL (if configured) or initializes the YAML storage fallback
 4. Starts the TPS monitor and performance evaluator
@@ -772,14 +771,18 @@ Only one permission can be specified per rank using this built-in field. For mul
 
 ### ⏱️ Playtime
 
-Requires a minimum number of minutes of server playtime. Tracked via the vanilla `PLAY_ONE_MINUTE` statistic (1 minute = 1 200 ticks).
+RankForge's `PlaytimeTracker` records the exact time a player joins and calculates their playtime using real-world elapsed time through `System.currentTimeMillis()`. It does not depend on Minecraft ticks, TPS, or in-game time.
 
-```yaml
-required-playtime: 300    # 5 hours
-```
+The calculated playtime is converted into the human-readable format used by the Playtime Requirement system in `ranks.yml`.
 
-> [!NOTE]
-> This statistic resets if a player's server statistics are wiped. It is cross-world (counts all time on the server, not per world).
+### Playtime Format
+
+RankForge supports the following time units:
+
+- `s` = Seconds
+- `m` = Minutes
+- `hr` = Hours
+- `d` = Days
 
 ---
 
@@ -1002,6 +1005,153 @@ Developers can replace any GUI with their own implementation using `ExternalGUIR
 
 ---
 
+## 🖥️ GUI Configuration (`gui.yml`)
+
+All GUI layout, appearance, slot, and interaction settings are controlled by `plugins/RankForge/gui.yml`. The file is auto-generated on first run and supports full customization without editing Java code.
+
+> **Note for upgraders:** In previous versions, the `gui:` (rows) and `gui-click-shield:` sections lived in `config.yml`. They have moved to `gui.yml`. RankForge automatically migrates your existing values on first startup — no manual reconfiguration is required. If either section is missing from `gui.yml`, the plugin reads any custom value you had in `config.yml` and writes it to `gui.yml` transparently.
+
+### File Location
+
+```
+plugins/
+└── RankForge/
+    └── gui.yml
+```
+
+### Structure Overview
+
+```yaml
+# ── GUI Window Size ────────────────────────────────────────────
+# Number of inventory rows in each GUI (1–6).
+gui:
+  rows: 6
+  admin-rows: 6
+
+# ── GUI Click Shield ───────────────────────────────────────────
+# Per-player cooldown that prevents click-spam inside any RankForge GUI.
+gui-click-shield:
+  enabled: true
+  cooldown-ms: 400   # Minimum ms between two accepted clicks per player
+
+# ── Player-facing rank tree GUI (/rank) ────────────────────────
+player-gui:
+  title: "&8✦ &6RankForge &8✦"       # GUI window title
+  border-material: CYAN_STAINED_GLASS_PANE  # Border block type
+  head-slot: 4                         # Slot for the player's head item
+  info-slot: 49                        # Slot for the info/progress item
+
+# ── Admin rank editor (/rank editor) ──────────────────────────
+admin-gui:
+  title: "&8✦ &cAdmin Rank Editor &8✦"
+  border-material: RED_STAINED_GLASS_PANE
+
+# ── Per-rank detail editor (click a rank in the admin editor) ──
+detail-editor:
+  title-prefix: "&8✦ &6Editing: "
+  border-top: LIME_STAINED_GLASS_PANE
+  border-bottom: GRAY_STAINED_GLASS_PANE
+
+# ── Drag-and-drop slot reassignment editor ─────────────────────
+drag-drop:
+  title: "&8✦ &bSlot Editor &8✦"
+
+# ── Player list GUI (/rank playerlist) ────────────────────────
+player-list:
+  title: "&8✦ &9Player List &8✦"
+  border-material: BLUE_STAINED_GLASS_PANE
+  prev-page-slot: 45
+  close-slot: 49
+  next-page-slot: 53
+
+# ── Player data editor (click a player in the player list) ─────
+player-data-editor:
+  title-prefix: "&8✦ &9Editing: "
+  border-material: LIGHT_BLUE_STAINED_GLASS_PANE
+  block-breaks:
+    slot: 30
+    material: IRON_PICKAXE
+    name: "&7&lBlock Breaks"
+    lore:
+      - "&7Exact blocks broken (tracked by RankForge)."
+
+# ── Block-break stat panel settings ───────────────────────────
+block-break-stats:
+  show-in-rank-gui: true
+  show-in-player-data-editor: true
+  label: "&7Blocks Broken"
+  material: IRON_PICKAXE
+  value-format: "&a%count%"
+  unmet-format: "&cNeed &e%required% &cblocks &8(have &7%current%&8)"
+  met-format: "&a✔ &e%required% &ablocks broken"
+
+# ── Shared elements used across all GUIs ─────────────────────
+common:
+  filler-material: GRAY_STAINED_GLASS_PANE
+  close-material: BARRIER
+  close-name: "&cClose"
+  back-material: ARROW
+  back-name: "&7Back"
+
+# ── Requirement status icons on the next-rank GUI item ────────
+requirement-icons:
+  enabled: true
+  met-symbol: "&a✔"
+  unmet-symbol: "&c✘"
+  show-details: true
+
+# ── GUI themes (border colors) ────────────────────────────────
+themes:
+  default:
+    player-border: CYAN_STAINED_GLASS_PANE
+    admin-border: RED_STAINED_GLASS_PANE
+    list-border: BLUE_STAINED_GLASS_PANE
+  dark:
+    player-border: BLACK_STAINED_GLASS_PANE
+    admin-border: RED_STAINED_GLASS_PANE
+    list-border: BLUE_STAINED_GLASS_PANE
+  gold:
+    player-border: YELLOW_STAINED_GLASS_PANE
+    admin-border: ORANGE_STAINED_GLASS_PANE
+    list-border: YELLOW_STAINED_GLASS_PANE
+```
+
+### Key Sections
+
+| Section | Purpose |
+|---------|---------|
+| `gui` | Window row count for the player GUI and admin editor |
+| `gui-click-shield` | Per-player click cooldown to prevent inventory spam |
+| `player-gui` | Player-facing rank tree: title, border, slot positions |
+| `admin-gui` | Admin rank editor: title and border color |
+| `detail-editor` | Per-rank detail editor: title prefix and border colors |
+| `drag-drop` | Drag-and-drop slot editor title |
+| `player-list` | Player list GUI: title, border, pagination slot positions |
+| `player-data-editor` | Player data editor: title, border, and block-break display |
+| `block-break-stats` | How block-break counts appear across all GUIs |
+| `common` | Shared filler, close, and back button materials and labels |
+| `requirement-icons` | Met/unmet symbols on the next-rank item |
+| `themes` | Named border-color presets (active theme configurable per GUI) |
+
+### Customization Tips
+
+- **Titles** support `&` color codes and most Bukkit formatting codes.
+- **Materials** must be valid Bukkit `Material` enum names (all uppercase, underscores).
+- **Slots** are 0-indexed inventory slots (0–53 for a 6-row chest).
+- Apply changes with `/rank reload` — no server restart needed.
+
+### GUI Reference
+
+| GUI | Command | Description |
+|-----|---------|-------------|
+| Rank Tree | `/rank` | Player-facing animated rank progression view |
+| Admin Editor | `/rank editor` | Create, edit, and delete ranks in-game |
+| Slot Editor | `/rank editor drag` | Drag-and-drop rank reordering |
+| Player List | `/rank playerlist` | Browse and edit all player data |
+| Player Data Editor | *(click player in list)* | Edit individual player rank/XP/money |
+
+---
+
 ## 💄 Cosmetics
 
 Cosmetics are managed by `CosmeticManager`, which coordinates four sub-systems.
@@ -1075,7 +1225,7 @@ With PlaceholderAPI installed, RankForge registers all `%rankforge_*%` placehold
 | `%rankforge_player%` | `Steve` | Player's name |
 | `%rankforge_uuid%` | `xxxxxxxx-...` | Player's UUID |
 | `%rankforge_lang%` | `en` | Player's active language code |
-| `%rankforge_version%` | `3.3` | Plugin version |
+| `%rankforge_version%` | `3.4` | Plugin version |
 
 ### Scoreboard Example (CMI)
 
@@ -1319,7 +1469,7 @@ Plugin status and rank count.
 ```json
 {
   "plugin": "RankForge",
-  "version": "3.3",
+  "version": "3.4",
   "ranks": 5,
   "players": 12
 }
@@ -1418,7 +1568,7 @@ RankForge exposes a public API at `com.joshuaop.rankforge.api.RankForgeAPI`.
 <dependency>
   <groupId>com.github.JoshuaOP</groupId>
   <artifactId>RankForge</artifactId>
-  <version>3.3</version>
+  <version>3.4</version>
   <scope>provided</scope>
 </dependency>
 ```
@@ -1429,7 +1579,7 @@ repositories {
     maven { url 'https://jitpack.io' }
 }
 dependencies {
-    compileOnly 'com.github.JoshuaOP:RankForge:3.3'
+    compileOnly 'com.github.JoshuaOP:RankForge:3.4'
 }
 ```
 
@@ -1954,7 +2104,7 @@ A healthy startup looks like:
 [RankForge] [SoftDep] Vault=✓  LuckPerms=✓  PlaceholderAPI=✓  Floodgate=✗
 [RankForge] [Lang] Dynamically indexed 4 language profiles: [en, es, fil, id]
 [RankForge] [REST] API server listening on port 4567   ← (if enabled)
-[RankForge] RankForge v3.3 successfully loaded! (5 ranks compiled)
+[RankForge] RankForge v3.4 successfully loaded! (5 ranks compiled)
 ```
 
 If the rank count shows `(0 ranks compiled)`, `ranks.yml` failed to parse. Check for YAML syntax errors (indentation, missing colons, tab characters).
@@ -2041,97 +2191,6 @@ See [LICENSE](LICENSE) for the full text.
 
 ---
 
-## ⏱️ Real Playtime Tracking
-
-> Playtime requirements use real elapsed wall-clock time, not Minecraft ticks — accurate and unaffected by lag.
-
-### How It Works
-
-RankForge's `PlaytimeTracker` is a dedicated listener that records the exact moment each player joins and calculates elapsed time using `System.currentTimeMillis()`. This is completely independent of the server's tick rate (TPS), and is the foundation for the human-readable [Playtime Requirement Format](#playtime-requirement-format) used throughout `ranks.yml`.
-
-**Tick-based approximation (not used by `PlaytimeTracker`):**
-```
-playtime = PLAY_ONE_MINUTE_stat / 1200   ← tick-based, affected by TPS drops
-```
-
-**RankForge's wall-clock calculation:**
-```
-playtime = (currentTimeMillis - joinTimeMillis) / 60_000   ← real wall-clock time
-```
-
-**Why this matters:**
-- On a lagging server (10 TPS), a tick-based system would credit only **10 minutes** for every 20 minutes of real time.
-- A server reboot or GC pause would skew a tick counter permanently.
-- `PlaytimeTracker` is immune to all of this — if a player is online for 60 real minutes, they earn exactly 60 minutes.
-
-### Configuring `playtime`
-
-The configuration key is **unchanged** from previous versions. Set `playtime` inside a rank's `requirements` block:
-
-```yaml
-ranks:
-  Member:
-    requirements:
-      playtime: 60    # 60 real minutes of server playtime
-```
-
-```yaml
-ranks:
-  Veteran:
-    requirements:
-      playtime: 600   # 10 real hours
-```
-
-The value is always in **whole minutes**. Sub-minute precision (seconds) is intentionally discarded when saving — sessions shorter than 60 seconds do not count as a full minute.
-
-### Configuration Examples
-
-**Beginner server — short requirements:**
-```yaml
-ranks:
-  Newcomer:
-    requirements:
-      playtime: 0     # No playtime required
-
-  Member:
-    requirements:
-      playtime: 30    # 30 real minutes
-
-  Regular:
-    requirements:
-      playtime: 300   # 5 real hours
-```
-
-**Survival / vanilla server:**
-```yaml
-ranks:
-  Settler:
-    requirements:
-      playtime: 60    # 1 real hour
-
-  Veteran:
-    requirements:
-      playtime: 1200  # 20 real hours
-
-  Elder:
-    requirements:
-      playtime: 6000  # 100 real hours
-```
-
-**Prison server — combined with block-breaks:**
-```yaml
-ranks:
-  B:
-    requirements:
-      playtime: 60
-      block-breaks: 5000
-
-  C:
-    requirements:
-      playtime: 180
-      block-breaks: 25000
-```
-
 ### Behind the Scenes: Automatic Schema Handling
 
 No manual configuration changes are ever required for playtime tracking. The `playtime` key in `ranks.yml` stays the same whether you use whole minutes or the new duration-string format:
@@ -2159,153 +2218,6 @@ No manual configuration changes are ever required for playtime tracking. The `pl
 | Playtime resets on relog | Data not saving before quit | Check storage errors in console; ensure `playerdata.yml` is writable |
 | Requirement shows wrong time | Stale cache | Run `/rank reload` to flush the cache |
 | MySQL column missing | Very old database, migration failed | Check console for `[DB] Column migration check failed` warnings |
-
----
-
-## 🖥️ GUI Configuration (`gui.yml`)
-
-All GUI layout, appearance, slot, and interaction settings are controlled by `plugins/RankForge/gui.yml`. The file is auto-generated on first run and supports full customization without editing Java code.
-
-> **Note for upgraders:** In previous versions, the `gui:` (rows) and `gui-click-shield:` sections lived in `config.yml`. They have moved to `gui.yml`. RankForge automatically migrates your existing values on first startup — no manual reconfiguration is required. If either section is missing from `gui.yml`, the plugin reads any custom value you had in `config.yml` and writes it to `gui.yml` transparently.
-
-### File Location
-
-```
-plugins/
-└── RankForge/
-    └── gui.yml
-```
-
-### Structure Overview
-
-```yaml
-# ── GUI Window Size ────────────────────────────────────────────
-# Number of inventory rows in each GUI (1–6).
-gui:
-  rows: 6
-  admin-rows: 6
-
-# ── GUI Click Shield ───────────────────────────────────────────
-# Per-player cooldown that prevents click-spam inside any RankForge GUI.
-gui-click-shield:
-  enabled: true
-  cooldown-ms: 400   # Minimum ms between two accepted clicks per player
-
-# ── Player-facing rank tree GUI (/rank) ────────────────────────
-player-gui:
-  title: "&8✦ &6RankForge &8✦"       # GUI window title
-  border-material: CYAN_STAINED_GLASS_PANE  # Border block type
-  head-slot: 4                         # Slot for the player's head item
-  info-slot: 49                        # Slot for the info/progress item
-
-# ── Admin rank editor (/rank editor) ──────────────────────────
-admin-gui:
-  title: "&8✦ &cAdmin Rank Editor &8✦"
-  border-material: RED_STAINED_GLASS_PANE
-
-# ── Per-rank detail editor (click a rank in the admin editor) ──
-detail-editor:
-  title-prefix: "&8✦ &6Editing: "
-  border-top: LIME_STAINED_GLASS_PANE
-  border-bottom: GRAY_STAINED_GLASS_PANE
-
-# ── Drag-and-drop slot reassignment editor ─────────────────────
-drag-drop:
-  title: "&8✦ &bSlot Editor &8✦"
-
-# ── Player list GUI (/rank playerlist) ────────────────────────
-player-list:
-  title: "&8✦ &9Player List &8✦"
-  border-material: BLUE_STAINED_GLASS_PANE
-  prev-page-slot: 45
-  close-slot: 49
-  next-page-slot: 53
-
-# ── Player data editor (click a player in the player list) ─────
-player-data-editor:
-  title-prefix: "&8✦ &9Editing: "
-  border-material: LIGHT_BLUE_STAINED_GLASS_PANE
-  block-breaks:
-    slot: 30
-    material: IRON_PICKAXE
-    name: "&7&lBlock Breaks"
-    lore:
-      - "&7Exact blocks broken (tracked by RankForge)."
-
-# ── Block-break stat panel settings ───────────────────────────
-block-break-stats:
-  show-in-rank-gui: true
-  show-in-player-data-editor: true
-  label: "&7Blocks Broken"
-  material: IRON_PICKAXE
-  value-format: "&a%count%"
-  unmet-format: "&cNeed &e%required% &cblocks &8(have &7%current%&8)"
-  met-format: "&a✔ &e%required% &ablocks broken"
-
-# ── Shared elements used across all GUIs ─────────────────────
-common:
-  filler-material: GRAY_STAINED_GLASS_PANE
-  close-material: BARRIER
-  close-name: "&cClose"
-  back-material: ARROW
-  back-name: "&7Back"
-
-# ── Requirement status icons on the next-rank GUI item ────────
-requirement-icons:
-  enabled: true
-  met-symbol: "&a✔"
-  unmet-symbol: "&c✘"
-  show-details: true
-
-# ── GUI themes (border colors) ────────────────────────────────
-themes:
-  default:
-    player-border: CYAN_STAINED_GLASS_PANE
-    admin-border: RED_STAINED_GLASS_PANE
-    list-border: BLUE_STAINED_GLASS_PANE
-  dark:
-    player-border: BLACK_STAINED_GLASS_PANE
-    admin-border: RED_STAINED_GLASS_PANE
-    list-border: BLUE_STAINED_GLASS_PANE
-  gold:
-    player-border: YELLOW_STAINED_GLASS_PANE
-    admin-border: ORANGE_STAINED_GLASS_PANE
-    list-border: YELLOW_STAINED_GLASS_PANE
-```
-
-### Key Sections
-
-| Section | Purpose |
-|---------|---------|
-| `gui` | Window row count for the player GUI and admin editor |
-| `gui-click-shield` | Per-player click cooldown to prevent inventory spam |
-| `player-gui` | Player-facing rank tree: title, border, slot positions |
-| `admin-gui` | Admin rank editor: title and border color |
-| `detail-editor` | Per-rank detail editor: title prefix and border colors |
-| `drag-drop` | Drag-and-drop slot editor title |
-| `player-list` | Player list GUI: title, border, pagination slot positions |
-| `player-data-editor` | Player data editor: title, border, and block-break display |
-| `block-break-stats` | How block-break counts appear across all GUIs |
-| `common` | Shared filler, close, and back button materials and labels |
-| `requirement-icons` | Met/unmet symbols on the next-rank item |
-| `themes` | Named border-color presets (active theme configurable per GUI) |
-
-### Customization Tips
-
-- **Titles** support `&` color codes and most Bukkit formatting codes.
-- **Materials** must be valid Bukkit `Material` enum names (all uppercase, underscores).
-- **Slots** are 0-indexed inventory slots (0–53 for a 6-row chest).
-- Apply changes with `/rank reload` — no server restart needed.
-
-### GUI Reference
-
-| GUI | Command | Description |
-|-----|---------|-------------|
-| Rank Tree | `/rank` | Player-facing animated rank progression view |
-| Admin Editor | `/rank editor` | Create, edit, and delete ranks in-game |
-| Slot Editor | `/rank editor drag` | Drag-and-drop rank reordering |
-| Player List | `/rank playerlist` | Browse and edit all player data |
-| Player Data Editor | *(click player in list)* | Edit individual player rank/XP/money |
 
 ---
 
@@ -2434,7 +2346,7 @@ Drop the JAR into your server's `plugins/` folder:
 ```
 server/
 └── plugins/
-    └── RankForge-3.3.jar
+    └── RankForge-3.4.jar
 ```
 
 #### Step 3 — Install optional dependencies
@@ -2844,7 +2756,7 @@ With PlaceholderAPI installed, all `%rankforge_*%` placeholders are available in
 | `%rankforge_player%` | `Steve` | Player's display name (Bedrock-safe) |
 | `%rankforge_uuid%` | `xxxxxxxx-...` | Player's UUID |
 | `%rankforge_lang%` | `en` | Player's active language code |
-| `%rankforge_version%` | `3.3` | Plugin version |
+| `%rankforge_version%` | `3.4` | Plugin version |
 
 ---
 

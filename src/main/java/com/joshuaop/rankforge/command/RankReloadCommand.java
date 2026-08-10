@@ -46,8 +46,10 @@ public class RankReloadCommand {
 
         if (cache != null) {
             activeSessions = cache.getOnlineAndUnexpired();
-            if (plugin.getYamlPlayerDataStorage() != null && !activeSessions.isEmpty()) {
-                plugin.getYamlPlayerDataStorage().saveAll(activeSessions);
+            if (!activeSessions.isEmpty()) {
+                // Route the safety flush through the repository so it cannot
+                // persist an older snapshot over a newer cached rank.
+                plugin.getRankManager().getRepository().saveAll(activeSessions);
             }
         }
 

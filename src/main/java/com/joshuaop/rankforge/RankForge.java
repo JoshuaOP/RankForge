@@ -138,11 +138,13 @@ public final class RankForge extends JavaPlugin {
                 } catch (Exception e) {
                     getLogger().severe("SQL pipeline flush failed, attempting emergency YAML writeback: " + e.getMessage());
                     if (yamlPlayerDataStorage != null) {
-                        yamlPlayerDataStorage.saveAll(rankManager.getCacheManager().getOnlineAndUnexpired());
+                        rankManager.getRepository().saveAll(
+                                rankManager.getCacheManager().getOnlineAndUnexpired());
                     }
                 }
             } else if (yamlPlayerDataStorage != null) {
-                yamlPlayerDataStorage.saveAll(rankManager.getCacheManager().getOnlineAndUnexpired());
+                rankManager.getRepository().saveAll(
+                        rankManager.getCacheManager().getOnlineAndUnexpired());
             }
         }
 
@@ -183,7 +185,7 @@ public final class RankForge extends JavaPlugin {
             var stored = yamlPlayerDataStorage.loadAll();
             if (stored != null) {
                 for (var pd : stored) {
-                    rankManager.getCacheManager().put(pd.uuid(), pd);
+                    rankManager.getCacheManager().putOffline(pd.uuid(), pd);
                 }
             }
         }
@@ -306,7 +308,7 @@ public final class RankForge extends JavaPlugin {
                 if (yamlPlayerDataStorage != null && rankManager != null
                         && rankManager.getCacheManager() != null) {
                     var snapshot = rankManager.getCacheManager().getOnlineAndUnexpired();
-                    if (!snapshot.isEmpty()) yamlPlayerDataStorage.saveAll(snapshot);
+                    if (!snapshot.isEmpty()) rankManager.getRepository().saveAll(snapshot);
                 }
             }, yamlSyncInterval, yamlSyncInterval);
         }
@@ -341,10 +343,11 @@ public final class RankForge extends JavaPlugin {
             var cache = rankManager.getCacheManager();
             if (cache != null) {
                 for (Player online : Bukkit.getOnlinePlayers()) {
-                    String rankId = cache.contains(online.getUniqueId())
-                            ? cache.get(online.getUniqueId()).rankId()
-                            : rankManager.getDefaultRankId();
-                    cosmeticManager.onLogin(online, rankId);
+                    // Cache-first loading preserves the active session record;
+                    // storage is only consulted when no session snapshot exists.
+                    var data = rankManager.getRepository()
+                            .loadOrCreate(online.getUniqueId(), online.getName());
+                    if (data != null) cosmeticManager.onLogin(online, data.rankId());
                 }
             }
         }

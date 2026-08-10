@@ -1,6 +1,7 @@
 package com.joshuaop.rankforge.cosmetic;
 
 import com.joshuaop.rankforge.RankForge;
+import com.joshuaop.rankforge.db.PlayerData;
 import com.joshuaop.rankforge.rank.RankModel;
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Player;
@@ -17,12 +18,10 @@ public class JoinQuitManager implements Listener {
         this.plugin = plugin;
     }
 
-    @EventHandler
+    @EventHandler(priority = org.bukkit.event.EventPriority.NORMAL)
     public void onJoin(PlayerJoinEvent event) {
         if (!plugin.getConfig().getBoolean("cosmetic.join-quit.enabled", true)) return;
 
-        // NOTE: If your cache is loaded asynchronously, consider moving this calculation
-        // to a 1-2 tick delayed task or a data-ready callback event to avoid the race condition.
         String template = plugin.getConfig().getString("cosmetic.join-quit.join-message", 
                 "{prefix}§e{player} §ajoined the server.");
         
@@ -66,9 +65,8 @@ public class JoinQuitManager implements Listener {
     }
 
     private String getCurrentRankId(Player player) {
-        var cache = plugin.getRankManager().getCacheManager();
-        return cache.contains(player.getUniqueId())
-                ? cache.get(player.getUniqueId()).rankId()
-                : plugin.getRankManager().getDefaultRankId();
+        PlayerData data = plugin.getRankManager().getRepository()
+                .loadOrCreate(player.getUniqueId(), player.getName());
+        return data.rankId();
     }
 }

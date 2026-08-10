@@ -133,8 +133,11 @@ public class LangManager {
             
             // Asynchronously sync modified data state back to persistent storage units
             plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
-                if (plugin.getYamlPlayerDataStorage() != null) {
-                    plugin.getYamlPlayerDataStorage().savePlayer(updated);
+                if (plugin.getRankManager() != null) {
+                    // Repository.save re-reads the authoritative cache while
+                    // holding the per-player lock, so a stale language-task
+                    // snapshot cannot restore an older rank in storage.
+                    plugin.getRankManager().getRepository().save(updated);
                 }
             });
         }

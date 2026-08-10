@@ -638,8 +638,9 @@ public class RankAdminCommand {
     // ── Utility ───────────────────────────────────────────────────────────────
 
     private String getCurrentRank(Player p) {
-        PlayerData data = plugin.getRankManager().getCacheManager().get(p.getUniqueId());
-        return data != null ? data.rankId() : plugin.getRankManager().getDefaultRankId();
+        PlayerData data = plugin.getRankManager().getRepository()
+                .loadOrCreate(p.getUniqueId(), p.getName());
+        return data.rankId();
     }
 
     private void requirePlayer(CommandSender s, Consumer<Player> action) {

@@ -95,15 +95,8 @@ public class RankForgePlaceholders extends PlaceholderExpansion {
 
     private PlayerData loadData(OfflinePlayer op) {
         try {
-            var cache = plugin.getRankManager().getCacheManager();
-            if (cache.contains(op.getUniqueId())) {
-                PlayerData data = cache.get(op.getUniqueId());
-                if (plugin.getRankManager().getRank(data.rankId()) == null) {
-                    data = data.withRank(plugin.getRankManager().getDefaultRankId());
-                }
-                return data;
-            }
-            return PlayerData.defaultData(op.getUniqueId(), op.getName(), plugin.getRankManager().getDefaultRankId());
+            return plugin.getRankManager().getRepository()
+                    .loadOrCreate(op.getUniqueId(), op.getName());
         } catch (Exception e) {
             return null;
         }

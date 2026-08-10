@@ -43,10 +43,11 @@ public class RankStatistics {
         RankHistoryManager history = plugin.getHistoryManager();
         ExperienceManager  xpMgr  = plugin.getExperienceManager();
 
-        PlayerData data = plugin.getRankManager().getCacheManager().get(uuid);
-        String name    = data != null ? data.playerName() : "Unknown";
-        String rankId  = data != null ? data.rankId() : plugin.getRankManager().getDefaultRankId();
-        long   xp      = data != null ? data.experience() : 0L;
+        PlayerData data = plugin.getRankManager().getRepository()
+                .loadOrCreate(uuid, "Unknown");
+        String name    = data.playerName();
+        String rankId  = data.rankId();
+        long   xp      = data.experience();
 
         int rankups = 0, sets = 0, resets = 0;
         String highest = rankId;

@@ -23,13 +23,52 @@ public class RankDataRepository {
     }
 
     public PlayerData load(UUID uuid, String playerName) {
-        PlayerData cached = cache.get(uuid);
-        if (cached != null) return cached;
+        return loadOrCreate(uuid, playerName);
+    }
 
-        if (db.isConnected()) {
-            return loadFromMySQL(uuid, playerName);
-        }
+    /**
+     * Loads a joining player's record from the configured backend, replacing
+     * any stale cache entry only after the storage read has completed.
+     *
+     * <p>Join handling uses this path because a cache entry may be a
+     * short-lived offline snapshot. The per-player lock also makes this wait
+     * for an in-flight quit save instead of racing it.</p>
+     */
+    public PlayerData loadFresh(UUID uuid, String playerName) {
+        return cache.withPlayerLock(uuid, () -> {
+            PlayerData loaded = loadFromStorage(uuid, playerName);
+            if (loaded != null) return loaded;
 
+            // A storage failure is not a new player. Preserve an existing
+            // cache snapshot rather than replacing it with Default.
+            PlayerData cached = cache.getRaw(uuid);
+            if (cached != null) return cached;
+            return makeDefault(uuid, playerName);
+        });
+    }
+
+    /**
+     * Returns the cached/backend record, creating and persisting Default only
+     * when neither backend contains a record.
+     */
+    public PlayerData loadOrCreate(UUID uuid, String playerName) {
+        return cache.withPlayerLock(uuid, () -> {
+            // The cache is authoritative for a loaded session. Reading storage
+            // first here allowed a stale pre-save record to replace a newer
+            // rank (for example VIP) with the previous Default rank.
+            PlayerData cached = cache.get(uuid);
+            if (cached != null) return cached;
+
+            PlayerData loaded = loadFromStorage(uuid, playerName);
+            if (loaded != null) return loaded;
+
+            PlayerData raw = cache.getRaw(uuid);
+            return raw != null ? raw : makeDefault(uuid, playerName);
+        });
+    }
+
+    private PlayerData loadFromStorage(UUID uuid, String playerName) {
+        if (db.isConnected()) return loadFromMySQL(uuid, playerName);
         return loadFromYaml(uuid, playerName);
     }
 
@@ -46,6 +85,9 @@ public class RankDataRepository {
             }
         } catch (SQLException e) {
             plugin.getLogger().warning("MySQL load failed for " + uuid + ": " + e.getMessage());
+            // A backend error is not evidence that the player is new. Never
+            // manufacture and persist Default after a failed query.
+            return null;
         }
         PlayerData def = makeDefault(uuid, playerName);
         save(def);
@@ -55,9 +97,7 @@ public class RankDataRepository {
     private PlayerData loadFromYaml(UUID uuid, String playerName) {
         YamlPlayerDataStorage yaml = plugin.getYamlPlayerDataStorage();
         if (yaml == null) {
-            PlayerData def = makeDefault(uuid, playerName);
-            cache.put(uuid, def);
-            return def;
+            return null;
         }
         PlayerData data = yaml.loadPlayer(uuid, playerName);
         cache.put(uuid, data);
@@ -65,11 +105,24 @@ public class RankDataRepository {
     }
 
     public void save(PlayerData data) {
-        if (db.isConnected()) {
-            saveToMySQL(data);
-        } else {
-            saveToYaml(data);
-        }
+        if (data == null || data.uuid() == null) return;
+        cache.withPlayerLock(data.uuid(), () -> {
+            // Prefer the newest cache record over an older async snapshot.
+            PlayerData current = cache.getRaw(data.uuid());
+            PlayerData toPersist = current != null ? current : data;
+            if (db.isConnected()) saveToMySQL(toPersist);
+            else saveToYaml(toPersist);
+            return null;
+        });
+    }
+
+    /**
+     * Persists a snapshot collection without allowing an older snapshot to
+     * overwrite a newer record in the shared cache.
+     */
+    public void saveAll(Collection<PlayerData> players) {
+        if (players == null) return;
+        for (PlayerData data : players) save(data);
     }
 
     private void saveToMySQL(PlayerData data) {
