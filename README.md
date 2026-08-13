@@ -1341,9 +1341,9 @@ The `prefix` key at the top of each language file sets the message prefix for th
 
 When `storage.type: yaml` is set (or MySQL connection fails), player data is stored in memory and periodically flushed to YAML files. This is suitable for single-server setups.
 
-```yaml
-storage:
-  type: yaml
+```yaml-ranks:
+  enabled: true
+  file: "ranks.yml"
 
 sync:
   interval-ticks: 200    # Flush every 200 ticks (10 seconds)
