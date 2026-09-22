@@ -322,8 +322,10 @@ public class ProgressService {
     }
 
     private PlayerData loadData(Player player) {
-        return plugin.getRankManager().getRepository()
-                .loadOrCreate(player.getUniqueId(), player.getName());
+        var cache = plugin.getRankManager().getCacheManager();
+        if (cache.contains(player.getUniqueId())) return cache.get(player.getUniqueId());
+        return PlayerData.defaultData(player.getUniqueId(), player.getName(),
+                plugin.getRankManager().getDefaultRankId());
     }
 
     private double safeGetBalance(Player player) {

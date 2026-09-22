@@ -138,7 +138,7 @@ public class YamlPlayerDataStorage {
 
     // ── Player Read/Write ─────────────────────────────────────────────────────
 
-    public synchronized PlayerData loadPlayer(UUID uuid, String playerName) {
+    public PlayerData loadPlayer(UUID uuid, String playerName) {
         String path = "players." + uuid;
         if (!yaml.contains(path)) {
             String defaultRank = plugin.getRankManager() != null
@@ -168,7 +168,7 @@ public class YamlPlayerDataStorage {
         persist();
     }
 
-    public synchronized List<PlayerData> loadAll() {
+    public List<PlayerData> loadAll() {
         List<PlayerData> result = new ArrayList<>();
         ConfigurationSection section = yaml.getConfigurationSection("players");
         if (section == null) return result;
@@ -187,7 +187,7 @@ public class YamlPlayerDataStorage {
         return result;
     }
 
-    public synchronized boolean hasPlayer(UUID uuid) {
+    public boolean hasPlayer(UUID uuid) {
         return yaml.contains("players." + uuid);
     }
 

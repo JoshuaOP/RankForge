@@ -46,23 +46,12 @@ public class SoftDependency implements Listener {
 
     // ── Player Events ─────────────────────────────────────────────────────────
 
-    /**
-     * Load the authoritative player record before normal-priority listeners
-     * (join messages, GUIs, cosmetics, and integrations) can read rank data.
-     * This is synchronous by design: the repository already abstracts YAML and
-     * MySQL, and displaying Default before the read completes is incorrect.
-     */
-    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
         UUID   uuid   = player.getUniqueId();
 
-        PlayerData data = plugin.getRankManager().getRepository().loadFresh(uuid, player.getName());
-        if (data == null) {
-            data = PlayerData.defaultData(uuid, player.getName(),
-                    plugin.getRankManager().getDefaultRankId());
-            plugin.getRankManager().getCacheManager().put(uuid, data);
-        }
+        PlayerData data = plugin.getRankManager().getRepository().load(uuid, player.getName());
 
         if (!data.playerName().equals(player.getName())) {
             data = data.withPlayerName(player.getName());

@@ -358,9 +358,8 @@ public class RankCommand implements CommandExecutor, TabCompleter {
     }
 
     private String getCurrentRank(Player p) {
-        PlayerData data = plugin.getRankManager().getRepository()
-                .loadOrCreate(p.getUniqueId(), p.getName());
-        return data.rankId();
+        PlayerData data = plugin.getRankManager().getCacheManager().get(p.getUniqueId());
+        return data != null ? data.rankId() : plugin.getRankManager().getDefaultRankId();
     }
 
     private void requirePlayer(CommandSender s, String permission, Consumer<Player> action) {

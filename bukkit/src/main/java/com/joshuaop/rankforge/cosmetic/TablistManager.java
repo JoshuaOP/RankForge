@@ -1,7 +1,6 @@
 package com.joshuaop.rankforge.cosmetic;
 
 import com.joshuaop.rankforge.RankForge;
-import com.joshuaop.rankforge.db.PlayerData;
 import com.joshuaop.rankforge.rank.RankModel;
 import org.bukkit.entity.Player;
 
@@ -43,9 +42,11 @@ public class TablistManager {
     /** Update all online players' tablist names. */
     public void updateAll() {
         for (Player p : plugin.getServer().getOnlinePlayers()) {
-            PlayerData data = plugin.getRankManager().getRepository()
-                    .loadOrCreate(p.getUniqueId(), p.getName());
-            update(p, data.rankId());
+            var cache = plugin.getRankManager().getCacheManager();
+            String rankId = cache.contains(p.getUniqueId())
+                    ? cache.get(p.getUniqueId()).rankId()
+                    : plugin.getRankManager().getDefaultRankId();
+            update(p, rankId);
         }
     }
 }

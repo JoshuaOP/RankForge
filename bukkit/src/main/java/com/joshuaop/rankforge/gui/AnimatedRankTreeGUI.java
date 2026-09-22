@@ -2,7 +2,6 @@ package com.joshuaop.rankforge.gui;
 
 import com.joshuaop.rankforge.RankForge;
 import com.joshuaop.rankforge.api.ProgressService;
-import com.joshuaop.rankforge.db.PlayerData;
 import com.joshuaop.rankforge.rank.RankModel;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -225,9 +224,10 @@ public class AnimatedRankTreeGUI {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private String getCurrentRankId(Player player) {
-        PlayerData data = plugin.getRankManager().getRepository()
-                .loadOrCreate(player.getUniqueId(), player.getName());
-        return data.rankId();
+        var cache = plugin.getRankManager().getCacheManager();
+        return cache.contains(player.getUniqueId())
+                ? cache.get(player.getUniqueId()).rankId()
+                : plugin.getRankManager().getDefaultRankId();
     }
 
     private double safeBalance(Player player) {

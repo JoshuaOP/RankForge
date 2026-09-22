@@ -176,16 +176,11 @@ public class ExperienceManager {
         UUID uuid = target.getUniqueId();
         PlayerData data = cache.getRaw(uuid);
         if (data == null) {
-            data = plugin.getRankManager().getRepository()
-                    .loadOrCreate(uuid, target.getName());
+            data = PlayerData.defaultData(uuid, target.getName(), plugin.getRankManager().getDefaultRankId());
         }
-
-        PlayerData updated = cache.update(uuid,
-                current -> current.withExperience(getVanillaTotalXp(target)));
-        if (updated == null) {
-            updated = data.withExperience(getVanillaTotalXp(target));
-            cache.put(uuid, updated);
-        }
+        
+        PlayerData updated = data.withExperience(getVanillaTotalXp(target));
+        cache.put(uuid, updated);
 
         for (Player onlineAdmin : Bukkit.getOnlinePlayers()) {
             String title = onlineAdmin.getOpenInventory().getTitle();
