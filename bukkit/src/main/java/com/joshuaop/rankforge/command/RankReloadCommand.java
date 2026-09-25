@@ -50,6 +50,9 @@ public class RankReloadCommand {
                 plugin.getYamlPlayerDataStorage().saveAll(activeSessions);
             }
         }
+        if (plugin.getYamlPlayerDataStorage() != null) {
+            plugin.getYamlPlayerDataStorage().awaitPendingWrites();
+        }
 
         // 3. Perform the reload (config, ranks, lang, cosmetics, tasks, etc.).
         //    plugin.reload() internally calls rankManager.repairOrphanedRanks()

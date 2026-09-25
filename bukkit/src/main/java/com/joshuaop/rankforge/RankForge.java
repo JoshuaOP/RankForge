@@ -119,6 +119,8 @@ public final class RankForge extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        getLogger().info("RankForge shutdown beginning.");
+
         // Shutdown networking and schedules immediately to prevent async state corruption
         if (restAPIServer      != null) restAPIServer.stop();
         if (expansionRegistry  != null) expansionRegistry.disableAll();
@@ -132,9 +134,10 @@ public final class RankForge extends JavaPlugin {
 
         if (rankManager != null && rankManager.getCacheManager() != null) {
             if (syncService != null && databaseManager != null && databaseManager.isConnected()) {
+                // Stop future MySQL flushes before performing the final synchronous flush.
+                syncService.stop();
                 try {
                     syncService.flushNow();
-                    syncService.stop();
                 } catch (Exception e) {
                     getLogger().severe("SQL pipeline flush failed, attempting emergency YAML writeback: " + e.getMessage());
                     if (yamlPlayerDataStorage != null) {
@@ -144,6 +147,13 @@ public final class RankForge extends JavaPlugin {
             } else if (yamlPlayerDataStorage != null) {
                 yamlPlayerDataStorage.saveAll(rankManager.getCacheManager().getOnlineAndUnexpired());
             }
+        }
+        if (yamlPlayerDataStorage != null) {
+            // The final save above is now submitted. Reject any later saves, let this
+            // already-submitted work finish, and only then mark the writer shut down.
+            yamlPlayerDataStorage.beginShutdown();
+            yamlPlayerDataStorage.awaitPendingWrites();
+            yamlPlayerDataStorage.shutdownWriter();
         }
 
         if (rankYamlManager != null) rankYamlManager.saveSync();
@@ -302,7 +312,9 @@ public final class RankForge extends JavaPlugin {
         if (databaseManager != null && !databaseManager.isConnected()) {
             long yamlSyncInterval = getConfig() != null
                     ? getConfig().getLong("sync.interval-ticks", 200L) : 200L;
-            taskScheduler.repeatAsync(() -> {
+            // Snapshot live cache/Vault/player state on the main thread. The storage
+            // layer serializes that snapshot before dispatching file I/O asynchronously.
+            taskScheduler.repeat(() -> {
                 if (yamlPlayerDataStorage != null && rankManager != null
                         && rankManager.getCacheManager() != null) {
                     var snapshot = rankManager.getCacheManager().getOnlineAndUnexpired();

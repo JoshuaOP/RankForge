@@ -4,6 +4,7 @@ import com.joshuaop.rankforge.RankForge;
 
 import java.sql.*;
 import java.util.*;
+import java.util.logging.Level;
 
 /**
  * Handles all read/write operations for player rank data.
@@ -100,13 +101,44 @@ public class RankDataRepository {
             ps.setString(9, String.join(",", data.completedRequirements()));
             ps.executeUpdate();
         } catch (SQLException e) {
-            plugin.getLogger().warning("MySQL save failed for " + data.uuid() + ": " + e.getMessage());
+            plugin.getLogger().log(Level.WARNING,
+                    "MySQL save failed for " + data.uuid()
+                            + ": " + e.getMessage()
+                            + ". Falling back to YAML.", e);
+
+            boolean yamlSaved = false;
+            RuntimeException yamlFailure = null;
+            try {
+                yamlSaved = saveToYaml(data);
+            } catch (RuntimeException fallbackException) {
+                yamlFailure = fallbackException;
+            }
+
+            if (yamlSaved) {
+                plugin.getLogger().info(
+                        "Player data for " + data.uuid()
+                                + " was saved to YAML as an emergency fallback."
+                );
+            } else {
+                String fallbackDetail = yamlFailure == null
+                        ? "YAML fallback returned failure."
+                        : "YAML fallback threw " + yamlFailure.getClass().getSimpleName()
+                                + ": " + yamlFailure.getMessage();
+                plugin.getLogger().log(Level.SEVERE,
+                        "CRITICAL: Could not save player data for " + data.uuid()
+                                + " to MySQL or YAML. MySQL failure: " + e.getMessage()
+                                + ". " + fallbackDetail, yamlFailure);
+            }
         }
     }
 
-    private void saveToYaml(PlayerData data) {
+    private boolean saveToYaml(PlayerData data) {
         YamlPlayerDataStorage yaml = plugin.getYamlPlayerDataStorage();
-        if (yaml != null) yaml.savePlayer(data);
+        if (yaml == null) {
+            plugin.getLogger().warning("YAML emergency fallback is unavailable for " + data.uuid() + ".");
+            return false;
+        }
+        return yaml.savePlayerForEmergencyFallback(data);
     }
 
     public List<PlayerData> getTopPlayers(int limit) {

@@ -131,12 +131,11 @@ public class LangManager {
             PlayerData updated = current.withLanguage(lang);
             cache.put(uuid, updated);
             
-            // Asynchronously sync modified data state back to persistent storage units
-            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
-                if (plugin.getYamlPlayerDataStorage() != null) {
-                    plugin.getYamlPlayerDataStorage().savePlayer(updated);
-                }
-            });
+            // YAML storage snapshots runtime player/Vault state on the main thread,
+            // then dispatches only serialized file content to its async writer.
+            if (plugin.getYamlPlayerDataStorage() != null) {
+                plugin.getYamlPlayerDataStorage().savePlayer(updated);
+            }
         }
     }
 
