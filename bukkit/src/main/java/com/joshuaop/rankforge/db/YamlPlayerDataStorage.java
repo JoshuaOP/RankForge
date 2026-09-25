@@ -16,8 +16,10 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -48,14 +50,21 @@ public class YamlPlayerDataStorage {
     private YamlConfiguration     yaml;
     private final Object          writeLock = new Object();
     private final Object          fileWriteLock = new Object();
+    private final Map<UUID, Long>  latestPlayerWrite = new HashMap<>();
     private YamlSaveSnapshot      pendingSnapshot;
     private YamlSaveSnapshot      inFlightSnapshot;
     private BukkitTask             asyncWriterTask;
+    private long                  writeGeneration;
+    private long                  writerToken;
+    private int                   consecutiveWriteFailures;
     private boolean               asyncWriteScheduled;
     private boolean               acceptingWrites = true;
     private boolean               writerShutdown;
     private static final long     EMERGENCY_FALLBACK_TIMEOUT_MILLIS = 5_000L;
     private static final long     SHUTDOWN_WAIT_TIMEOUT_MILLIS = 10_000L;
+    private static final int      MAX_AUTOMATIC_RETRIES = 5;
+    private static final long     RETRY_BASE_DELAY_TICKS = 20L;
+    private static final long     RETRY_MAX_DELAY_TICKS = 20L * 30L;
 
     /**
      * Immutable snapshot prepared on the main thread. The YAML document is serialized
@@ -74,17 +83,18 @@ public class YamlPlayerDataStorage {
 
     /**
      * Result state belongs to one save request rather than to the storage instance.
-     * A failed operation may still be retained in a snapshot for a later retry, but
-     * its original caller receives the result of that particular write attempt.
+     * An operation remains pending while its snapshot is retried. It reaches exactly
+     * one terminal state after a write succeeds or the bounded retry budget is spent.
      */
     private static final class SaveOperation {
-        private final CountDownLatch completion = new CountDownLatch(1);
-        private final AtomicBoolean completed = new AtomicBoolean();
-        private volatile boolean succeeded;
+        private enum State { PENDING, SUCCEEDED, FAILED }
 
-        private void complete(boolean succeeded) {
-            if (completed.compareAndSet(false, true)) {
-                this.succeeded = succeeded;
+        private final CountDownLatch completion = new CountDownLatch(1);
+        private volatile State state = State.PENDING;
+
+        private synchronized void complete(boolean succeeded) {
+            if (state == State.PENDING) {
+                state = succeeded ? State.SUCCEEDED : State.FAILED;
                 completion.countDown();
             }
         }
@@ -92,7 +102,7 @@ public class YamlPlayerDataStorage {
         private boolean await(long timeoutMillis) {
             try {
                 if (!completion.await(timeoutMillis, TimeUnit.MILLISECONDS)) return false;
-                return succeeded;
+                return state == State.SUCCEEDED;
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return false;
@@ -104,7 +114,15 @@ public class YamlPlayerDataStorage {
         this.plugin  = plugin;
         this.logger  = plugin.getLogger();
         File dataDir = new File(plugin.getDataFolder(), "data");
-        if (!dataDir.exists()) dataDir.mkdirs();
+        try {
+            Files.createDirectories(dataDir.toPath());
+            if (!Files.isDirectory(dataDir.toPath())) {
+                throw new IOException("Required player-data path is not a directory: " + dataDir);
+            }
+        } catch (IOException | SecurityException e) {
+            throw new IllegalStateException("Could not create player-data directory "
+                    + dataDir + "; YAML persistence is unavailable.", e);
+        }
         this.dataFile = new File(dataDir, "playerdata.yml");
         load();
         checkAndMigrateSchema();
@@ -114,57 +132,76 @@ public class YamlPlayerDataStorage {
 
     private void load() {
         if (!dataFile.exists()) {
-            try {
-                dataFile.createNewFile();
-                yaml = YamlConfiguration.loadConfiguration(dataFile);
-                yaml.set("data-version", CURRENT_DATA_VERSION);
-                persist();
-                return;
-            } catch (IOException e) {
-                plugin.getLogger().severe("Could not create playerdata.yml: " + e.getMessage());
+            yaml = new YamlConfiguration();
+            yaml.set("data-version", CURRENT_DATA_VERSION);
+            if (!persist(yaml)) {
+                throw new IllegalStateException("Could not initialize playerdata.yml; "
+                        + "YAML persistence is unavailable.");
             }
+            return;
         }
         yaml = YamlConfiguration.loadConfiguration(dataFile);
     }
 
     private void checkAndMigrateSchema() {
         int savedVersion = yaml.getInt("data-version", 1);
+        if (savedVersion > CURRENT_DATA_VERSION) {
+            acceptingWrites = false;
+            plugin.getLogger().severe("playerdata.yml uses unsupported future schema v"
+                    + savedVersion + " (supported through v" + CURRENT_DATA_VERSION
+                    + "). YAML writes are disabled to protect the file.");
+            return;
+        }
         if (savedVersion >= CURRENT_DATA_VERSION) return;
 
         plugin.getLogger().info("Migrating player data v" + savedVersion
                 + " → v" + CURRENT_DATA_VERSION + "...");
 
-        if (savedVersion < 2) migrateV1ToV2();
-        if (savedVersion < 3) migrateV2ToV3();
-        if (savedVersion < 4) migrateV3ToV4();
-        if (savedVersion < 5) migrateV4ToV5();
-
-        yaml.set("data-version", CURRENT_DATA_VERSION);
-        persist();
+        YamlConfiguration migrated = new YamlConfiguration();
+        try {
+            migrated.loadFromString(yaml.saveToString());
+            if (savedVersion < 2) migrateV1ToV2(migrated);
+            if (savedVersion < 3) migrateV2ToV3(migrated);
+            if (savedVersion < 4) migrateV3ToV4(migrated);
+            if (savedVersion < 5) migrateV4ToV5(migrated);
+            migrated.set("data-version", CURRENT_DATA_VERSION);
+        } catch (Exception e) {
+            acceptingWrites = false;
+            plugin.getLogger().log(Level.SEVERE,
+                    "Player data migration failed before persistence; original data was retained.", e);
+            return;
+        }
+        if (!persist(migrated)) {
+            acceptingWrites = false;
+            plugin.getLogger().severe("Player data migration could not be persisted. "
+                    + "The original file remains intact and YAML writes are disabled.");
+            return;
+        }
+        yaml = migrated;
         plugin.getLogger().info("Player data migration complete.");
     }
 
     /** v1 → v2: rename legacy-rank-node → rank */
-    private void migrateV1ToV2() {
-        ConfigurationSection players = yaml.getConfigurationSection("players");
+    private void migrateV1ToV2(YamlConfiguration target) {
+        ConfigurationSection players = target.getConfigurationSection("players");
         if (players == null) return;
         for (String uuidStr : players.getKeys(false)) {
             String path = "players." + uuidStr;
-            if (yaml.contains(path + ".legacy-rank-node")) {
-                yaml.set(path + ".rank", yaml.getString(path + ".legacy-rank-node"));
-                yaml.set(path + ".legacy-rank-node", null);
+            if (target.contains(path + ".legacy-rank-node")) {
+                target.set(path + ".rank", target.getString(path + ".legacy-rank-node"));
+                target.set(path + ".legacy-rank-node", null);
             }
         }
     }
 
     /** v2 → v3: add block-breaks field defaulting to 0 for all existing entries */
-    private void migrateV2ToV3() {
-        ConfigurationSection players = yaml.getConfigurationSection("players");
+    private void migrateV2ToV3(YamlConfiguration target) {
+        ConfigurationSection players = target.getConfigurationSection("players");
         if (players == null) return;
         for (String uuidStr : players.getKeys(false)) {
             String path = "players." + uuidStr + ".block-breaks";
-            if (!yaml.contains(path)) {
-                yaml.set(path, 0L);
+            if (!target.contains(path)) {
+                target.set(path, 0L);
             }
         }
     }
@@ -175,15 +212,13 @@ public class YamlPlayerDataStorage {
      * the tick-based stat is inherently inaccurate and would propagate that error forward.
      * Players simply begin accumulating real-world playtime from this point onward.
      */
-    private void migrateV3ToV4() {
-        ConfigurationSection players = yaml.getConfigurationSection("players");
+    private void migrateV3ToV4(YamlConfiguration target) {
+        ConfigurationSection players = target.getConfigurationSection("players");
         if (players == null) return;
-        int count = 0;
         for (String uuidStr : players.getKeys(false)) {
             String path = "players." + uuidStr + ".playtime-minutes";
-            if (!yaml.contains(path)) {
-                yaml.set(path, 0L);
-                count++;
+            if (!target.contains(path)) {
+                target.set(path, 0L);
             }
         }
     }
@@ -192,13 +227,13 @@ public class YamlPlayerDataStorage {
      * v4 → v5: add completed-requirements field defaulting to an empty list for all
      * existing entries. No conversion is required since this is a brand-new field.
      */
-    private void migrateV4ToV5() {
-        ConfigurationSection players = yaml.getConfigurationSection("players");
+    private void migrateV4ToV5(YamlConfiguration target) {
+        ConfigurationSection players = target.getConfigurationSection("players");
         if (players == null) return;
         for (String uuidStr : players.getKeys(false)) {
             String path = "players." + uuidStr + ".completed-requirements";
-            if (!yaml.contains(path)) {
-                yaml.set(path, new ArrayList<String>());
+            if (!target.contains(path)) {
+                target.set(path, new ArrayList<String>());
             }
         }
     }
@@ -206,16 +241,25 @@ public class YamlPlayerDataStorage {
     // ── Player Read/Write ─────────────────────────────────────────────────────
 
     public PlayerData loadPlayer(UUID uuid, String playerName) {
-        String path = "players." + uuid;
-        if (!yaml.contains(path)) {
-            String defaultRank = plugin.getRankManager() != null
-                    ? plugin.getRankManager().getDefaultRankId() : "Guest";
-            PlayerData def = PlayerData.defaultData(uuid, playerName, defaultRank);
-            savePlayer(def);
-            return def;
-        }
+        synchronized (writeLock) {
+            String path = "players." + uuid;
+            if (!yaml.contains(path)) {
+                String defaultRank = plugin.getRankManager() != null
+                        ? plugin.getRankManager().getDefaultRankId() : "Guest";
+                PlayerData def = PlayerData.defaultData(uuid, playerName, defaultRank);
+                savePlayer(def);
+                return def;
+            }
 
-        return fromSection(uuid, yaml.getConfigurationSection(path));
+            ConfigurationSection section = yaml.getConfigurationSection(path);
+            if (section == null) {
+                logger.warning("Player data section is missing or invalid for " + uuid + ".");
+                String defaultRank = plugin.getRankManager() != null
+                        ? plugin.getRankManager().getDefaultRankId() : "Guest";
+                return PlayerData.defaultData(uuid, playerName, defaultRank);
+            }
+            return fromSection(uuid, section);
+        }
     }
 
     public void savePlayer(PlayerData data) {
@@ -225,8 +269,10 @@ public class YamlPlayerDataStorage {
     }
 
     public void saveAll(Collection<PlayerData> players) {
+        if (players == null || players.isEmpty()) return;
         requireMainThread();
         List<PlayerData> inputSnapshot = copyPlayers(players);
+        if (inputSnapshot.isEmpty()) return;
         saveAllOnMain(inputSnapshot);
     }
 
@@ -236,8 +282,12 @@ public class YamlPlayerDataStorage {
      * successful YAML write from a failed one.
      */
     boolean savePlayerForEmergencyFallback(PlayerData data) {
+        final long requestGeneration;
+        synchronized (writeLock) {
+            requestGeneration = ++writeGeneration;
+        }
         if (Bukkit.isPrimaryThread()) {
-            return savePlayerAndAwait(data);
+            return savePlayerAndAwait(data, requestGeneration);
         }
 
         CountDownLatch completion = new CountDownLatch(1);
@@ -246,27 +296,27 @@ public class YamlPlayerDataStorage {
             logger.warning("Scheduling the YAML emergency fallback on the main thread.");
             plugin.getServer().getScheduler().runTask(plugin, () -> {
                 try {
-                    succeeded.set(savePlayerAndAwait(data));
+                    succeeded.set(savePlayerAndAwait(data, requestGeneration));
                 } finally {
                     completion.countDown();
                 }
             });
         } catch (RuntimeException e) {
             logger.warning("Could not schedule the YAML emergency fallback: " + e.getMessage());
-            return saveEmergencyPlayerDirect(data);
+            return saveEmergencyPlayerDirect(data, requestGeneration);
         }
 
         try {
             if (!completion.await(EMERGENCY_FALLBACK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
                 logger.warning("Timed out while waiting for the YAML emergency fallback for "
                         + data.uuid() + "; attempting a direct emergency write.");
-                return saveEmergencyPlayerDirect(data);
+                return saveEmergencyPlayerDirect(data, requestGeneration);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             logger.warning("Interrupted while waiting for the YAML emergency fallback; "
                     + "attempting a direct emergency write.");
-            return saveEmergencyPlayerDirect(data);
+            return saveEmergencyPlayerDirect(data, requestGeneration);
         }
         return succeeded.get();
     }
@@ -357,23 +407,29 @@ public class YamlPlayerDataStorage {
     }
 
     public List<PlayerData> loadAll() {
-        List<PlayerData> result = new ArrayList<>();
-        ConfigurationSection section = yaml.getConfigurationSection("players");
-        if (section == null) return result;
-        for (String key : section.getKeys(false)) {
-            try {
-                UUID uuid = UUID.fromString(key);
-                ConfigurationSection ps = section.getConfigurationSection(key);
-                if (ps == null) continue;
-                PlayerData loaded = fromSection(uuid, ps);
-                result.add(loaded);
-            } catch (IllegalArgumentException ignored) {}
+        synchronized (writeLock) {
+            List<PlayerData> result = new ArrayList<>();
+            ConfigurationSection section = yaml.getConfigurationSection("players");
+            if (section == null) return result;
+            for (String key : section.getKeys(false)) {
+                try {
+                    UUID uuid = UUID.fromString(key);
+                    ConfigurationSection ps = section.getConfigurationSection(key);
+                    if (ps == null) {
+                        logger.warning("Skipping invalid player data section for key " + key + ".");
+                        continue;
+                    }
+                    result.add(fromSection(uuid, ps));
+                } catch (IllegalArgumentException ignored) {}
+            }
+            return result;
         }
-        return result;
     }
 
     public boolean hasPlayer(UUID uuid) {
-        return yaml.contains("players." + uuid);
+        synchronized (writeLock) {
+            return yaml.contains("players." + uuid);
+        }
     }
 
     public File getDataFile() { return dataFile; }
@@ -397,6 +453,13 @@ public class YamlPlayerDataStorage {
     }
 
     private synchronized SaveOperation savePlayerOnMain(PlayerData input) {
+        return savePlayerOnMain(input, null);
+    }
+
+    private synchronized SaveOperation savePlayerOnMain(
+            PlayerData input,
+            Long emergencyRequestGeneration
+    ) {
         requireMainThread();
         if (!isAcceptingWrites()) {
             logger.warning("Ignoring YAML player save for " + input.uuid()
@@ -410,8 +473,14 @@ public class YamlPlayerDataStorage {
                         + " because shutdown has started.");
                 return null;
             }
+            if (emergencyRequestGeneration != null
+                    && latestPlayerWrite.getOrDefault(input.uuid(), Long.MIN_VALUE)
+                            > emergencyRequestGeneration) {
+                logger.fine("Skipping stale YAML emergency snapshot for " + input.uuid() + ".");
+                return null;
+            }
             write(snapshot);
-            return queueAsyncWrite(List.of(snapshot.uuid()));
+            return queueAsyncWrite(List.of(snapshot.uuid()), emergencyRequestGeneration);
         }
     }
 
@@ -425,6 +494,7 @@ public class YamlPlayerDataStorage {
                 .map(this::stitchRuntimeData)
                 .map(YamlPlayerDataStorage::copyData)
                 .toList();
+        if (snapshots.isEmpty()) return null;
         synchronized (writeLock) {
             if (!acceptingWrites || writerShutdown) {
                 logger.warning("Ignoring YAML player save batch because shutdown has started.");
@@ -436,6 +506,13 @@ public class YamlPlayerDataStorage {
     }
 
     private SaveOperation queueAsyncWrite(List<UUID> affectedUuids) {
+        return queueAsyncWrite(affectedUuids, null);
+    }
+
+    private SaveOperation queueAsyncWrite(
+            List<UUID> affectedUuids,
+            Long requestedGeneration
+    ) {
         // YamlConfiguration is only touched on the main thread. The immutable,
         // already-serialized YAML text captures the complete document, including
         // records not in this save batch.
@@ -451,50 +528,82 @@ public class YamlPlayerDataStorage {
             return operation;
         }
         boolean scheduleWriter = false;
+        long token = 0L;
         synchronized (writeLock) {
             if (!acceptingWrites || writerShutdown) {
                 logger.warning("Ignoring YAML write because the storage system is shutting down.");
                 operation.complete(false);
                 return operation;
             }
+            long generation = requestedGeneration == null
+                    ? ++writeGeneration : requestedGeneration;
+            for (UUID uuid : affectedUuids) latestPlayerWrite.put(uuid, generation);
             pendingSnapshot = mergeSnapshots(pendingSnapshot, snapshot);
             clearCancelledWriterLocked();
             if (!asyncWriteScheduled) {
                 asyncWriteScheduled = true;
+                token = ++writerToken;
                 scheduleWriter = true;
             }
         }
 
         if (!scheduleWriter) return operation;
+        scheduleAsyncWriter(token, 0L);
+        return operation;
+    }
+
+    private void scheduleAsyncWriter(long token, long delayTicks) {
         try {
-            BukkitTask task = plugin.getServer().getScheduler()
-                    .runTaskAsynchronously(plugin, this::drainAsyncWrites);
+            BukkitTask task = delayTicks <= 0
+                    ? plugin.getServer().getScheduler()
+                            .runTaskAsynchronously(plugin, () -> drainAsyncWrites(token))
+                    : plugin.getServer().getScheduler()
+                            .runTaskLaterAsynchronously(plugin,
+                                    () -> drainAsyncWrites(token), delayTicks);
             synchronized (writeLock) {
-                if (asyncWriteScheduled) asyncWriterTask = task;
+                if (asyncWriteScheduled && writerToken == token) {
+                    asyncWriterTask = task;
+                } else {
+                    task.cancel();
+                }
             }
         } catch (RuntimeException e) {
             synchronized (writeLock) {
-                asyncWriteScheduled = false;
-                asyncWriterTask = null;
-                writeLock.notifyAll();
+                if (writerToken == token) {
+                    asyncWriteScheduled = false;
+                    asyncWriterTask = null;
+                    writerToken++;
+                    writeLock.notifyAll();
+                }
             }
-            logger.log(Level.WARNING, "Could not schedule playerdata.yml save.", e);
-            // Keep the newest pending snapshot and use the same atomic path as the
-            // asynchronous writer. This prevents a newer snapshot from being stranded.
-            recoverPendingWritesSynchronously();
+            logger.log(Level.WARNING, "Could not schedule playerdata.yml writer.", e);
+            if (delayTicks <= 0 && recoverPendingWritesSynchronously()) return;
+            failPendingWrites();
         }
-        return operation;
+    }
+
+    private void failPendingWrites() {
+        synchronized (writeLock) {
+            if (pendingSnapshot != null) {
+                completeOperations(pendingSnapshot, false);
+            }
+            writeLock.notifyAll();
+        }
     }
 
     /**
      * The async writer deliberately uses only the already serialized snapshot and
      * Java file I/O. It does not touch Bukkit, Vault, players, or live PlayerData.
      */
-    private void drainAsyncWrites() {
+    private void drainAsyncWrites(long token) {
+        long retryToken = 0L;
+        long retryDelay = 0L;
         try {
             while (true) {
                 YamlSaveSnapshot snapshot;
                 synchronized (writeLock) {
+                    if (writerToken != token) return;
+                    asyncWriterTask = null;
                     snapshot = pendingSnapshot;
                     pendingSnapshot = null;
                     if (snapshot == null) {
@@ -517,27 +626,49 @@ public class YamlPlayerDataStorage {
                 }
                 synchronized (writeLock) {
                     inFlightSnapshot = null;
-                    completeOperations(snapshot, succeeded);
-                    if (!succeeded) {
-                        // Retain the failed snapshot. If a newer snapshot already exists,
-                        // its complete YAML document supersedes the failed one.
+                    if (succeeded) {
+                        consecutiveWriteFailures = 0;
+                        completeOperations(snapshot, true);
+                    } else {
+                        // If a newer document is queued, it supersedes the failed bytes but
+                        // carries the failed operation until that newer document is durable.
                         pendingSnapshot = mergeFailedSnapshot(snapshot, pendingSnapshot);
-                        asyncWriteScheduled = false;
+                        consecutiveWriteFailures++;
+                        if (consecutiveWriteFailures > MAX_AUTOMATIC_RETRIES) {
+                            completeOperations(pendingSnapshot, false);
+                            pendingSnapshot = null;
+                            consecutiveWriteFailures = 0;
+                            asyncWriteScheduled = false;
+                            asyncWriterTask = null;
+                            writerToken++;
+                            writeLock.notifyAll();
+                            return;
+                        }
+                        retryDelay = Math.min(RETRY_MAX_DELAY_TICKS,
+                                RETRY_BASE_DELAY_TICKS
+                                        << Math.min(consecutiveWriteFailures - 1, 30));
+                        retryToken = ++writerToken;
+                        asyncWriteScheduled = true;
                         asyncWriterTask = null;
                         writeLock.notifyAll();
-                        return;
                     }
+                }
+                if (retryToken != 0L) {
+                    scheduleAsyncWriter(retryToken, retryDelay);
+                    return;
                 }
             }
         } finally {
             synchronized (writeLock) {
-                if (inFlightSnapshot != null && pendingSnapshot == null) {
-                    pendingSnapshot = inFlightSnapshot;
+                if (writerToken == token) {
+                    if (inFlightSnapshot != null && pendingSnapshot == null) {
+                        pendingSnapshot = inFlightSnapshot;
+                    }
+                    inFlightSnapshot = null;
+                    asyncWriteScheduled = false;
+                    asyncWriterTask = null;
+                    writeLock.notifyAll();
                 }
-                inFlightSnapshot = null;
-                asyncWriteScheduled = false;
-                asyncWriterTask = null;
-                writeLock.notifyAll();
             }
         }
     }
@@ -665,47 +796,64 @@ public class YamlPlayerDataStorage {
      * inspect Bukkit or live players, so a broken main-thread scheduler cannot make
      * the MySQL-to-YAML fallback wait forever.
      */
-    private boolean saveEmergencyPlayerDirect(PlayerData data) {
-        YamlSaveSnapshot baseSnapshot;
+    private boolean saveEmergencyPlayerDirect(PlayerData data, long requestGeneration) {
         synchronized (writeLock) {
-            baseSnapshot = pendingSnapshot != null ? pendingSnapshot : inFlightSnapshot;
-        }
-
-        YamlConfiguration emergency = new YamlConfiguration();
-        try {
-            if (baseSnapshot != null) {
-                emergency.loadFromString(baseSnapshot.yamlContent());
-            } else if (dataFile.exists()) {
-                emergency = YamlConfiguration.loadConfiguration(dataFile);
+            if (latestPlayerWrite.getOrDefault(data.uuid(), Long.MIN_VALUE)
+                    > requestGeneration) {
+                logger.fine("Skipping stale direct YAML emergency snapshot for "
+                        + data.uuid() + ".");
+                return false;
             }
-            emergency.set("data-version", CURRENT_DATA_VERSION);
-            write(emergency, data);
-            boolean succeeded = writeSnapshot(
-                    emergency.saveToString(), List.of(data.uuid()));
-            if (succeeded) {
-                synchronized (writeLock) {
-                    if (pendingSnapshot == baseSnapshot && baseSnapshot != null) {
+
+            YamlSaveSnapshot baseSnapshot =
+                    pendingSnapshot != null ? pendingSnapshot : inFlightSnapshot;
+            YamlConfiguration emergency = new YamlConfiguration();
+            try {
+                if (baseSnapshot != null) {
+                    emergency.loadFromString(baseSnapshot.yamlContent());
+                } else if (dataFile.exists()) {
+                    emergency = YamlConfiguration.loadConfiguration(dataFile);
+                }
+                emergency.set("data-version", CURRENT_DATA_VERSION);
+                write(emergency, data);
+                String emergencyContent = emergency.saveToString();
+                boolean succeeded = writeSnapshot(
+                        emergencyContent, List.of(data.uuid()));
+                if (succeeded) {
+                    if (inFlightSnapshot != null) {
+                        if (pendingSnapshot == null) {
+                            pendingSnapshot = new YamlSaveSnapshot(
+                                    emergencyContent, List.of(data.uuid()), List.of());
+                        } else {
+                            pendingSnapshot = new YamlSaveSnapshot(
+                                    emergencyContent,
+                                    mergeUuids(pendingSnapshot.affectedUuids(),
+                                            List.of(data.uuid())),
+                                    pendingSnapshot.operations());
+                        }
+                    } else if (pendingSnapshot == baseSnapshot && baseSnapshot != null) {
                         completeOperations(baseSnapshot, true);
                         pendingSnapshot = null;
+                        writeLock.notifyAll();
                     }
                 }
+                return succeeded;
+            } catch (Exception e) {
+                logger.log(Level.WARNING, "Direct YAML emergency write failed for "
+                        + data.uuid() + ".", e);
+                return false;
             }
-            return succeeded;
-        } catch (Exception e) {
-            logger.log(Level.WARNING, "Direct YAML emergency write failed for "
-                    + data.uuid() + ".", e);
-            return false;
         }
     }
 
-    private boolean savePlayerAndAwait(PlayerData data) {
+    private boolean savePlayerAndAwait(PlayerData data, long requestGeneration) {
         requireMainThread();
         if (!isAcceptingWrites()) {
             logger.warning("Cannot perform YAML emergency fallback for " + data.uuid()
                     + " because shutdown has started.");
             return false;
         }
-        SaveOperation operation = savePlayerOnMain(data);
+        SaveOperation operation = savePlayerOnMain(data, requestGeneration);
         return operation != null && operation.await(EMERGENCY_FALLBACK_TIMEOUT_MILLIS);
     }
 
@@ -750,13 +898,12 @@ public class YamlPlayerDataStorage {
         );
     }
 
-    private boolean persist() {
+    private boolean persist(YamlConfiguration configuration) {
         try {
-            yaml.save(dataFile);
-            return true;
+            return writeSnapshot(configuration.saveToString(), List.of());
         }
-        catch (IOException e) {
-            plugin.getLogger().warning("Failed to save playerdata.yml: " + e.getMessage());
+        catch (Exception e) {
+            plugin.getLogger().log(Level.WARNING, "Failed to save playerdata.yml.", e);
             return false;
         }
     }
