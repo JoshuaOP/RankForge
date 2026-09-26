@@ -402,7 +402,10 @@ public class PlayerDataEditorGUI {
         // Async persist to storage
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                plugin.getRankManager().getRepository().save(data);
+                if (!plugin.getRankManager().getRepository().save(data)) {
+                    plugin.getLogger().warning("Player-data edit was not persisted for "
+                            + data.uuid() + ".");
+                }
             } catch (Exception e) {
                 plugin.getLogger().warning("Async save failed for "
                         + data.uuid() + ": " + e.getMessage());

@@ -261,8 +261,12 @@ public class RankAdminCommand {
             }
             PlayerData updated = current.withCompletedRequirement(reqType);
             cache.put(uuid, updated);
-            plugin.getRankManager().getRepository().save(updated);
-            return true;
+            boolean saved = plugin.getRankManager().getRepository().save(updated);
+            if (!saved) {
+                plugin.getLogger().warning("Bypass data was updated in memory but was not persisted for "
+                        + uuid + ".");
+            }
+            return saved;
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to persist bypass '" + reqType
                     + "' for " + uuid + ": " + e.getMessage());
@@ -486,16 +490,17 @@ public class RankAdminCommand {
      */
     private void applyOfflineRankChange(CommandSender s, String targetName,
                                         String rankId, String changeType) {
+        // UUID resolution may consult Bukkit's offline-player API, so complete
+        // it before crossing to the asynchronous persistence task.
+        UUID resolvedUuid = resolveOfflineUUID(targetName);
+        if (resolvedUuid == null) {
+            s.sendMessage("§c✘ Player §e" + targetName
+                    + " §chas no stored data and is not online.");
+            return;
+        }
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             try {
-                UUID targetUuid = resolveOfflineUUID(targetName);
-
-                if (targetUuid == null) {
-                    Bukkit.getScheduler().runTask(plugin, () ->
-                            s.sendMessage("§c✘ Player §e" + targetName
-                                    + " §chas no stored data and is not online."));
-                    return;
-                }
+                UUID targetUuid = resolvedUuid;
 
                 CacheManager cache = plugin.getRankManager().getCacheManager();
                 PlayerData current = cache.get(targetUuid);
@@ -512,7 +517,9 @@ public class RankAdminCommand {
                 String prevRank    = current.rankId();
                 PlayerData updated = current.withRank(rankId);
                 cache.put(targetUuid, updated);
-                plugin.getRankManager().getRepository().save(updated);
+                if (!plugin.getRankManager().getRepository().save(updated)) {
+                    throw new IllegalStateException("storage did not confirm the rank change");
+                }
 
                 if (plugin.getHistoryManager() != null) {
                     com.joshuaop.rankforge.experience.RankHistoryEntry.ChangeType ct;

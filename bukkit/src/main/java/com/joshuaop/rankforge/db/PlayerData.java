@@ -47,6 +47,23 @@ public record PlayerData(
                 : Collections.unmodifiableSet(new LinkedHashSet<>(completedRequirements));
     }
 
+    /**
+     * Database/YAML boundary validation.  A record that fails this check is never
+     * allowed to replace a cached record or be written as a recovery snapshot.
+     */
+    public boolean isValidFor(UUID expectedUuid) {
+        return uuid != null
+                && (expectedUuid == null || expectedUuid.equals(uuid))
+                && playerName != null && !playerName.isBlank()
+                && rankId != null && !rankId.isBlank()
+                && language != null && !language.isBlank()
+                && Double.isFinite(money) && money >= 0.0
+                && experience >= 0L
+                && blockBreaks >= 0L
+                && playTime >= 0L
+                && completedRequirements != null;
+    }
+
     /** Create default PlayerData for a brand-new player. */
     public static PlayerData defaultData(UUID uuid, String playerName, String defaultRank) {
         return new PlayerData(uuid, playerName, defaultRank, 0L, 0.0, "en", 0L, 0L, Set.of());

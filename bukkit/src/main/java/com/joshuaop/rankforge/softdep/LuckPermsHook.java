@@ -3,11 +3,13 @@ package com.joshuaop.rankforge.softdep;
 import com.joshuaop.rankforge.rank.RankModel;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.node.Node;
+import net.luckperms.api.node.metadata.NodeMetadataKey;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Isolated LuckPerms integration.
@@ -19,6 +21,8 @@ import java.util.UUID;
  */
 class LuckPermsHook {
 
+    private static final NodeMetadataKey<String> MANAGED =
+            NodeMetadataKey.of("rankforge-managed", String.class);
     private final LuckPerms api;
 
     private LuckPermsHook(LuckPerms api) {
@@ -38,23 +42,26 @@ class LuckPermsHook {
         return lp != null ? new LuckPermsHook(lp) : null;
     }
 
-    void applyPermissions(Player player, RankModel model) {
-        if (model == null || model.getPermissions().isEmpty()) return;
+    CompletableFuture<Void> applyPermissions(Player player, RankModel model) {
         UUID uuid = player.getUniqueId();
-        api.getUserManager().modifyUser(uuid, user -> {
+        return api.getUserManager().modifyUser(uuid, user -> {
+            // Only remove nodes marked as ours. Other plugins' identical
+            // permission nodes remain untouched.
+            user.data().clear(node -> node.getMetadata(MANAGED)
+                    .map("true"::equals).orElse(false));
+            if (model == null) return;
             for (String perm : model.getPermissions()) {
-                user.data().add(Node.builder(perm).value(true).build());
+                user.data().add(Node.builder(perm).value(true)
+                        .withMetadata(MANAGED, "true").build());
             }
         });
     }
 
-    void removePermissions(Player player, RankModel model) {
-        if (model == null || model.getPermissions().isEmpty()) return;
+    CompletableFuture<Void> removePermissions(Player player, RankModel model) {
         UUID uuid = player.getUniqueId();
-        api.getUserManager().modifyUser(uuid, user -> {
-            for (String perm : model.getPermissions()) {
-                user.data().remove(Node.builder(perm).value(true).build());
-            }
+        return api.getUserManager().modifyUser(uuid, user -> {
+            user.data().clear(node -> node.getMetadata(MANAGED)
+                    .map("true"::equals).orElse(false));
         });
     }
 }

@@ -141,11 +141,11 @@ public final class RankForge extends JavaPlugin {
                 } catch (Exception e) {
                     getLogger().severe("SQL pipeline flush failed, attempting emergency YAML writeback: " + e.getMessage());
                     if (yamlPlayerDataStorage != null) {
-                        yamlPlayerDataStorage.saveAll(rankManager.getCacheManager().getOnlineAndUnexpired());
+                        yamlPlayerDataStorage.saveAll(rankManager.getCacheManager().snapshotOnlineAndUnexpired());
                     }
                 }
             } else if (yamlPlayerDataStorage != null) {
-                yamlPlayerDataStorage.saveAll(rankManager.getCacheManager().getOnlineAndUnexpired());
+                yamlPlayerDataStorage.saveAll(rankManager.getCacheManager().snapshotOnlineAndUnexpired());
             }
         }
         if (yamlPlayerDataStorage != null) {
@@ -267,8 +267,9 @@ public final class RankForge extends JavaPlugin {
     }
 
     private void postInit() {
-        if (databaseManager != null && databaseManager.isConnected() && syncService != null) {
-            syncService.start();
+        if (syncService != null) {
+            if (databaseManager != null && databaseManager.isConnected()) syncService.start();
+            syncService.startRecoveryMonitor();
         }
 
         if (performanceManager != null) performanceManager.start();
@@ -317,7 +318,7 @@ public final class RankForge extends JavaPlugin {
             taskScheduler.repeat(() -> {
                 if (yamlPlayerDataStorage != null && rankManager != null
                         && rankManager.getCacheManager() != null) {
-                    var snapshot = rankManager.getCacheManager().getOnlineAndUnexpired();
+                    var snapshot = rankManager.getCacheManager().snapshotOnlineAndUnexpired();
                     if (!snapshot.isEmpty()) yamlPlayerDataStorage.saveAll(snapshot);
                 }
             }, yamlSyncInterval, yamlSyncInterval);

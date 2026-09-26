@@ -32,6 +32,10 @@ public class RankService {
     }
 
     public boolean rankUp(Player player) {
+        if (!Bukkit.isPrimaryThread()) {
+            plugin.getLogger().warning("Rank-up rejected off the Bukkit main thread.");
+            return false;
+        }
         if (!plugin.getRankupQueue().acquire(player.getUniqueId())) {
             plugin.getLangManager().send(player, "rankup_processing");
             return false;
@@ -55,7 +59,7 @@ public class RankService {
         Bukkit.getPluginManager().callEvent(event);
         if (event.isCancelled()) return false;
 
-        applyRank(player, event.getNewRankId(), RankHistoryEntry.ChangeType.SET);
+        if (!applyRank(player, event.getNewRankId(), RankHistoryEntry.ChangeType.SET)) return false;
         plugin.getHookRegistry().fireRankSet(player, oldRankId, rankId);
         return true;
     }
@@ -72,7 +76,7 @@ public class RankService {
         Bukkit.getPluginManager().callEvent(event);
         if (event.isCancelled()) return;
 
-        applyRank(player, event.getDefaultRankId(), RankHistoryEntry.ChangeType.RESET);
+        if (!applyRank(player, event.getDefaultRankId(), RankHistoryEntry.ChangeType.RESET)) return;
         plugin.getHookRegistry().fireRankReset(player, oldRankId);
     }
 
@@ -112,11 +116,22 @@ public class RankService {
         String resolvedId = event.getNewRankId();
 
         RankModel nextModel = rm.getRank(resolvedId);
-        if (nextModel != null && nextModel.getRequiredMoney() > 0) {
-            plugin.getRequirementManager().withdrawMoney(player, nextModel.getRequiredMoney());
+        if (nextModel == null) {
+            plugin.getLogger().warning("Rank-up resolved to unknown rank '" + resolvedId + "'.");
+            return false;
+        }
+        if (nextModel.getRequiredMoney() > 0
+                && !plugin.getRequirementManager().withdrawMoney(
+                        player, nextModel.getRequiredMoney())) {
+            plugin.getLogger().warning("Rank-up payment was not confirmed for "
+                    + player.getUniqueId() + "; rank-up aborted.");
+            plugin.getLangManager().send(player, "rankup_fail");
+            return false;
         }
 
-        applyRank(player, resolvedId, RankHistoryEntry.ChangeType.RANKUP);
+        if (!applyRank(player, resolvedId, RankHistoryEntry.ChangeType.RANKUP)) {
+            return false;
+        }
 
         // Deduct XP levels after rank is applied and all checks have passed.
         if (plugin.getExperienceManager() != null) {
@@ -137,7 +152,18 @@ public class RankService {
         if (afterRank != null && !afterRank.completedRequirements().isEmpty()) {
             PlayerData cleared = afterRank.withCompletedRequirements(java.util.Set.of());
             plugin.getRankManager().getCacheManager().put(player.getUniqueId(), cleared);
-            plugin.getRankManager().getRepository().save(cleared);
+        }
+
+        PlayerData finalData = plugin.getRankManager().getCacheManager()
+                .getRaw(player.getUniqueId());
+        boolean persisted = finalData != null
+                && plugin.getRankManager().getRepository().save(finalData);
+        if (!persisted) {
+            plugin.getLogger().severe("Rank-up changed " + player.getUniqueId()
+                    + " in memory but immediate persistence was not confirmed.");
+            player.sendMessage("§cYour rank changed, but it could not be saved yet. "
+                    + "Please contact an administrator if it does not persist.");
+            return false;
         }
 
         plugin.getHookRegistry().fireRankup(player, oldRankId, resolvedId);
@@ -261,17 +287,30 @@ public class RankService {
         }
     }
 
-    private void applyRank(Player player, String newRankId, RankHistoryEntry.ChangeType changeType) {
+    private boolean applyRank(Player player, String newRankId,
+                              RankHistoryEntry.ChangeType changeType) {
         PlayerData oldData = loadData(player);
         String     oldRank = oldData.rankId();
 
-        plugin.getRankManager().getCacheManager().put(player.getUniqueId(),
-                oldData.withRank(newRankId));
+        PlayerData updated = oldData.withRank(newRankId);
+        plugin.getRankManager().getCacheManager().put(player.getUniqueId(), updated);
+        boolean persisted = plugin.getRankManager().getRepository().save(updated);
+        if (!persisted) {
+            plugin.getLogger().severe("Could not immediately persist rank change for "
+                    + player.getUniqueId() + ".");
+            player.sendMessage("§cThe rank change could not be saved. Please contact an administrator.");
+            return false;
+        }
 
         String display = plugin.getRankManager().getDisplayName(newRankId);
         plugin.getSoundManager().playRankup(player);
         plugin.getAnnouncementManager().sendRankup(player, display);
-        plugin.getSoftDependency().applyRankPermissions(player, newRankId);
+        if (!plugin.getSoftDependency().applyRankPermissions(player, oldRank, newRankId)) {
+            plugin.getLogger().severe("RankForge permission update was not accepted for "
+                    + player.getUniqueId() + ".");
+            player.sendMessage("§cYour rank changed, but its permissions could not be applied.");
+            return false;
+        }
         plugin.getCosmeticManager().onRankup(player, newRankId, display);
         executeRankCommands(player, newRankId);
 
@@ -280,6 +319,7 @@ public class RankService {
                     player.getUniqueId(), player.getName(),
                     oldRank, newRankId, changeType, System.currentTimeMillis()));
         }
+        return true;
     }
 
     private void executeRankCommands(Player player, String rankId) {

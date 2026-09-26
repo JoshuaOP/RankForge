@@ -45,9 +45,11 @@ class VaultAdapter {
     }
 
     boolean withdraw(Player player, double amount) {
+        if (player == null || !Double.isFinite(amount) || amount <= 0.0) return false;
         try {
-            return economy.has(player, amount)
-                    && economy.withdrawPlayer(player, amount).transactionSuccess();
+            if (!economy.has(player, amount)) return false;
+            var response = economy.withdrawPlayer(player, amount);
+            return response != null && response.transactionSuccess();
         } catch (Exception e) { return false; }
     }
 

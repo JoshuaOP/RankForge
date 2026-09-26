@@ -3,6 +3,8 @@ package com.joshuaop.rankforge.db;
 import com.joshuaop.rankforge.RankForge;
 import org.bukkit.scheduler.BukkitTask;
 
+import java.sql.SQLException;
+
 /**
  * Periodically flushes cached player data to MySQL asynchronously.
  * Only started when MySQL is connected. YAML sync is handled separately in RankForge.
@@ -15,6 +17,7 @@ public class SyncService {
 
     private final RankForge plugin;
     private BukkitTask      task;
+    private BukkitTask      recoveryTask;
 
     public SyncService(RankForge plugin) {
         this.plugin = plugin;
@@ -23,7 +26,9 @@ public class SyncService {
     public void start() {
         long interval = plugin.getConfig().getLong("sync.interval-ticks", 200L);
 
-        task = plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin, () -> {
+        // Snapshot live Bukkit state on the main thread. Only immutable
+        // PlayerData records cross into the asynchronous database work.
+        task = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
             CacheManager cache = getCache();
             if (cache == null) return;
 
@@ -37,21 +42,79 @@ public class SyncService {
                 plugin.getPlaytimeTracker().flushAll();
             }
 
-            int count = 0;
-            for (PlayerData data : cache.getOnlineAndUnexpired()) {
-                getRepository().save(data);
-                count++;
-            }
-            if (count > 0) {
-                plugin.getLogger().fine("Flushed " + count + " player records to MySQL.");
-            }
+            var snapshots = cache.snapshotOnlineAndUnexpired();
+            if (snapshots.isEmpty()) return;
+            plugin.getTaskScheduler().async(() -> {
+                int count = 0;
+                for (PlayerData data : snapshots) {
+                    if (getRepository().save(data)) count++;
+                }
+                if (count > 0) {
+                    plugin.getLogger().fine("Flushed " + count + " player records to storage.");
+                }
+            });
         }, interval, interval);
 
+    }
+
+    /**
+     * Monitors a failed MySQL connection. Recovery writes the newest valid YAML
+     * and in-memory snapshots into the verified pool before normal MySQL use
+     * resumes; it never imports potentially stale MySQL rows into the cache.
+     */
+    public void startRecoveryMonitor() {
+        if (recoveryTask != null && !recoveryTask.isCancelled()) return;
+        if (!plugin.getDatabaseManager().isMysqlConfigured()) return;
+        long interval = Math.max(200L,
+                plugin.getConfig().getLong("sync.interval-ticks", 200L) * 3L);
+        recoveryTask = plugin.getServer().getScheduler().runTaskTimerAsynchronously(
+                plugin, this::attemptMySQLRecovery, interval, interval);
+    }
+
+    private void attemptMySQLRecovery() {
+        if (plugin.getDatabaseManager().isConnected()) return;
+        if (!plugin.getDatabaseManager().reconnect()) return;
+
+        YamlPlayerDataStorage yaml = plugin.getYamlPlayerDataStorage();
+        if (yaml == null) return;
+
+        boolean recovered = true;
+        for (PlayerData data : yaml.loadAll()) {
+            if (!getRepository().save(data)) {
+                recovered = false;
+                break;
+            }
+        }
+
+        if (recovered) {
+            CacheManager cache = getCache();
+            if (cache != null) {
+                for (CacheManager.Entry entry : cache.getCache().values()) {
+                    PlayerData data = entry.data();
+                    if (data != null && !getRepository().save(data)) {
+                        recovered = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!recovered) {
+            plugin.getDatabaseManager().markUnavailable(
+                    new SQLException("MySQL recovery snapshot was not fully persisted."));
+        } else {
+            plugin.getDatabaseManager().finishRecovery();
+            plugin.getLogger().info("MySQL recovery verified; newest YAML/cache snapshots "
+                    + "were persisted before failover ended.");
+        }
     }
 
     public void stop() {
         if (task != null && !task.isCancelled()) {
             task.cancel();
+        }
+        if (recoveryTask != null && !recoveryTask.isCancelled()) {
+            recoveryTask.cancel();
         }
     }
 
@@ -72,7 +135,7 @@ public class SyncService {
             plugin.getPlaytimeTracker().flushAll();
         }
 
-        for (PlayerData data : cache.getOnlineAndUnexpired()) {
+        for (PlayerData data : cache.snapshotOnlineAndUnexpired()) {
             getRepository().save(data);
         }
     }

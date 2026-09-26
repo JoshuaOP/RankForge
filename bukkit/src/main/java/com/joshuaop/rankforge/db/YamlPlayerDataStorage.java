@@ -309,7 +309,7 @@ public class YamlPlayerDataStorage {
         try {
             if (!completion.await(EMERGENCY_FALLBACK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
                 logger.warning("Timed out while waiting for the YAML emergency fallback for "
-                        + data.uuid() + "; attempting a direct emergency write.");
+                        + data.uuid() + "; refusing an unsafe concurrent direct write.");
                 return saveEmergencyPlayerDirect(data, requestGeneration);
             }
         } catch (InterruptedException e) {
@@ -798,6 +798,15 @@ public class YamlPlayerDataStorage {
      */
     private boolean saveEmergencyPlayerDirect(PlayerData data, long requestGeneration) {
         synchronized (writeLock) {
+            // A direct write cannot safely run while the Bukkit writer has bytes
+            // in flight: those older bytes could land after this write. Let the
+            // normal writer finish instead of risking a stale overwrite.
+            clearCancelledWriterLocked();
+            if (inFlightSnapshot != null || asyncWriteScheduled) {
+                logger.warning("Deferring direct YAML emergency write for " + data.uuid()
+                        + " because another YAML write is in progress.");
+                return false;
+            }
             if (latestPlayerWrite.getOrDefault(data.uuid(), Long.MIN_VALUE)
                     > requestGeneration) {
                 logger.fine("Skipping stale direct YAML emergency snapshot for "
@@ -819,23 +828,13 @@ public class YamlPlayerDataStorage {
                 String emergencyContent = emergency.saveToString();
                 boolean succeeded = writeSnapshot(
                         emergencyContent, List.of(data.uuid()));
-                if (succeeded) {
-                    if (inFlightSnapshot != null) {
-                        if (pendingSnapshot == null) {
-                            pendingSnapshot = new YamlSaveSnapshot(
-                                    emergencyContent, List.of(data.uuid()), List.of());
-                        } else {
-                            pendingSnapshot = new YamlSaveSnapshot(
-                                    emergencyContent,
-                                    mergeUuids(pendingSnapshot.affectedUuids(),
-                                            List.of(data.uuid())),
-                                    pendingSnapshot.operations());
-                        }
-                    } else if (pendingSnapshot == baseSnapshot && baseSnapshot != null) {
-                        completeOperations(baseSnapshot, true);
-                        pendingSnapshot = null;
-                        writeLock.notifyAll();
-                    }
+                if (succeeded && pendingSnapshot != null) {
+                    // The emergency document was based on the pending document
+                    // and is now newer for the affected UUIDs. It supersedes
+                    // that queued document, so its waiters can complete safely.
+                    completeOperations(pendingSnapshot, true);
+                    pendingSnapshot = null;
+                    writeLock.notifyAll();
                 }
                 return succeeded;
             } catch (Exception e) {

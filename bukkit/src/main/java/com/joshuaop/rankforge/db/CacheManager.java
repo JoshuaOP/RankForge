@@ -32,12 +32,17 @@ public class CacheManager {
     // ── Write ─────────────────────────────────────────────────────────────────
 
     public void put(UUID id, PlayerData data) {
+        if (id == null || data == null || !data.isValidFor(id)) return;
         cache.put(id, new Entry(data, System.currentTimeMillis() + TTL_MS, true));
     }
 
     public void putAll(Map<UUID, PlayerData> map) {
         long exp = System.currentTimeMillis() + TTL_MS;
-        map.forEach((k, v) -> cache.put(k, new Entry(v, exp, true)));
+        map.forEach((k, v) -> {
+            if (k != null && v != null && v.isValidFor(k)) {
+                cache.put(k, new Entry(v, exp, true));
+            }
+        });
     }
 
     public void remove(UUID id) { cache.remove(id); }
@@ -92,7 +97,8 @@ public class CacheManager {
         if (e.activeOnline())
             cache.put(id, new Entry(e.data(), now + TTL_MS, true));
 
-        return stitchLiveData(e.data(), e.activeOnline());
+        // Live Bukkit/Vault/tracker access is only legal on the server thread.
+        return Bukkit.isPrimaryThread() ? stitchLiveData(e.data(), true) : e.data();
     }
 
     /** Raw retrieval without stitching — avoids recursion in internal save paths. */
@@ -118,16 +124,39 @@ public class CacheManager {
 
     public Collection<PlayerData> all() {
         return cache.values().stream()
-                .map(e -> stitchLiveData(e.data(), e.activeOnline()))
+                .map(e -> Bukkit.isPrimaryThread()
+                        ? stitchLiveData(e.data(), e.activeOnline()) : e.data())
                 .toList();
     }
 
     public Collection<PlayerData> getOnlineAndUnexpired() {
+        if (Bukkit.isPrimaryThread()) return snapshotOnlineAndUnexpired();
         long now = System.currentTimeMillis();
         return cache.values().stream()
                 .filter(e -> e.activeOnline() || e.expiresAt() >= now)
-                .map(e -> stitchLiveData(e.data(), e.activeOnline()))
+                .map(Entry::data)
                 .toList();
+    }
+
+    /**
+     * Captures all live Bukkit/Vault/tracker values on the main thread and
+     * publishes the immutable results back into the cache. Async persistence
+     * receives only this returned data.
+     */
+    public Collection<PlayerData> snapshotOnlineAndUnexpired() {
+        if (!Bukkit.isPrimaryThread()) {
+            throw new IllegalStateException("Live player snapshots must be created on the main thread.");
+        }
+        long now = System.currentTimeMillis();
+        List<PlayerData> snapshots = new ArrayList<>();
+        for (Map.Entry<UUID, Entry> entry : cache.entrySet()) {
+            Entry current = entry.getValue();
+            if (!current.activeOnline() && current.expiresAt() < now) continue;
+            PlayerData snapshot = stitchLiveData(current.data(), current.activeOnline());
+            put(entry.getKey(), snapshot);
+            snapshots.add(snapshot);
+        }
+        return List.copyOf(snapshots);
     }
 
     // ── Live Data Stitching ───────────────────────────────────────────────────

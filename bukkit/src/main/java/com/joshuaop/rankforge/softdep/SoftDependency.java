@@ -13,6 +13,8 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import org.bukkit.permissions.PermissionAttachment;
 
 /**
  * Unified soft-dependency handler and player event listener.
@@ -32,6 +34,8 @@ public class SoftDependency implements Listener {
     private LuckPermsHook  luckPermsHook;
     private boolean        papiEnabled;
     private boolean        floodgateEnabled;
+    private final ConcurrentHashMap<UUID, PermissionAttachment> rankAttachments =
+            new ConcurrentHashMap<>();
 
     public SoftDependency(RankForge plugin) {
         this.plugin = plugin;
@@ -72,7 +76,7 @@ public class SoftDependency implements Listener {
             plugin.getBypassRegistry().loadPersisted(uuid, data.completedRequirements());
         }
 
-        applyRankPermissions(player, data.rankId());
+        applyRankPermissions(player, null, data.rankId());
         plugin.getCosmeticManager().onLogin(player, data.rankId());
     }
 
@@ -96,8 +100,11 @@ public class SoftDependency implements Listener {
             }
 
             final PlayerData toSave = data;
-            plugin.getTaskScheduler().async(() ->
-                    plugin.getRankManager().getRepository().save(toSave));
+            plugin.getTaskScheduler().async(() -> {
+                if (!plugin.getRankManager().getRepository().save(toSave)) {
+                    plugin.getLogger().warning("Quit save was not confirmed for " + uuid + ".");
+                }
+            });
 
             cache.scheduleCleanup(uuid);
         }
@@ -167,23 +174,79 @@ public class SoftDependency implements Listener {
     }
 
     public void applyRankPermissions(Player player, String rankId) {
+        applyRankPermissions(player, null, rankId);
+    }
+
+    public boolean applyRankPermissions(Player player, String oldRankId, String rankId) {
         RankModel model = plugin.getRankManager().getRank(rankId);
-        if (model == null || model.getPermissions().isEmpty()) return;
 
         if (luckPermsHook != null) {
-            luckPermsHook.applyPermissions(player, model);
+            try {
+                var operation = luckPermsHook.applyPermissions(player, model);
+                if (operation == null) return false;
+                operation.whenComplete((ignored, error) -> {
+                    if (error != null) {
+                        plugin.getLogger().log(java.util.logging.Level.WARNING,
+                                "LuckPerms rank permission update failed for "
+                                        + player.getUniqueId(), error);
+                    }
+                });
+                return true;
+            } catch (RuntimeException e) {
+                plugin.getLogger().log(java.util.logging.Level.WARNING,
+                        "Could not apply RankForge LuckPerms permissions for "
+                                + player.getName(), e);
+                return false;
+            }
         } else {
-            for (String perm : model.getPermissions()) {
-                player.addAttachment(plugin, perm, true);
+            PermissionAttachment previous = rankAttachments.remove(player.getUniqueId());
+            if (previous != null) {
+                try {
+                    previous.remove();
+                } catch (IllegalArgumentException e) {
+                    plugin.getLogger().warning("Could not remove RankForge permissions for "
+                            + player.getName() + ": " + e.getMessage());
+                }
+            }
+            if (model == null || model.getPermissions().isEmpty()) return true;
+            try {
+                PermissionAttachment attachment = player.addAttachment(plugin);
+                for (String perm : model.getPermissions()) {
+                    if (perm != null && !perm.isBlank()) attachment.setPermission(perm, true);
+                }
+                rankAttachments.put(player.getUniqueId(), attachment);
+                return true;
+            } catch (RuntimeException e) {
+                plugin.getLogger().log(java.util.logging.Level.WARNING,
+                        "Could not apply RankForge permissions for " + player.getName(), e);
+                return false;
             }
         }
     }
 
     public void removeRankPermissions(Player player, String rankId) {
-        if (luckPermsHook == null) return;
-        RankModel model = plugin.getRankManager().getRank(rankId);
-        if (model == null || model.getPermissions().isEmpty()) return;
-        luckPermsHook.removePermissions(player, model);
+        if (luckPermsHook != null) {
+            try {
+                var operation = luckPermsHook.removePermissions(
+                        player, plugin.getRankManager().getRank(rankId));
+                if (operation != null) {
+                    operation.whenComplete((ignored, error) -> {
+                        if (error != null) {
+                            plugin.getLogger().log(java.util.logging.Level.WARNING,
+                                    "LuckPerms permission cleanup failed for "
+                                            + player.getUniqueId(), error);
+                        }
+                    });
+                }
+            } catch (RuntimeException e) {
+                plugin.getLogger().log(java.util.logging.Level.WARNING,
+                        "Could not clean up LuckPerms permissions for "
+                                + player.getName(), e);
+            }
+            return;
+        }
+        PermissionAttachment attachment = rankAttachments.remove(player.getUniqueId());
+        if (attachment != null) attachment.remove();
     }
 
     // ── PlaceholderAPI ────────────────────────────────────────────────────────
