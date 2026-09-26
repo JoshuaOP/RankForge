@@ -136,6 +136,28 @@ public class RankDataRepository {
         }
     }
 
+    /**
+     * Writes one recovery snapshot to the verified MySQL pool.
+     *
+     * <p>This intentionally uses {@link DatabaseManager#isConnected()}, not
+     * {@link DatabaseManager#isReadyForReads()}: the pool is marked as recovering
+     * while these writes are being restored, and reads must remain on YAML until
+     * recovery has completed.  Unlike a normal save, this method never falls back
+     * to YAML or performs another backend write.</p>
+     */
+    public boolean saveForRecovery(PlayerData requested) {
+        if (requested == null || !requested.isValidFor(requested.uuid())
+                || !db.isConnected()) return false;
+
+        UUID uuid = requested.uuid();
+        synchronized (playerLocks.computeIfAbsent(uuid, ignored -> new Object())) {
+            PlayerData current = cache.getRaw(uuid);
+            PlayerData data = current != null && current.isValidFor(uuid)
+                    ? current : requested;
+            return saveToMySQL(data);
+        }
+    }
+
     private boolean saveToMySQL(PlayerData data) {
         String sql = """
                 INSERT INTO rf_players

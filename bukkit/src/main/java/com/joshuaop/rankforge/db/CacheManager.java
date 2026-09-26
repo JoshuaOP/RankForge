@@ -36,6 +36,21 @@ public class CacheManager {
         cache.put(id, new Entry(data, System.currentTimeMillis() + TTL_MS, true));
     }
 
+    /**
+     * Replaces a record only if the cache still contains the exact state that was
+     * read by the caller.  This is used by offline mutations so a login, save, or
+     * another update cannot be overwritten by an older asynchronous snapshot.
+     */
+    public boolean compareAndSet(UUID id, PlayerData expected, PlayerData replacement) {
+        if (id == null || expected == null || replacement == null
+                || !replacement.isValidFor(id)) return false;
+        Entry current = cache.get(id);
+        if (current == null || !current.data().equals(expected)) return false;
+        Entry updated = new Entry(replacement, System.currentTimeMillis() + TTL_MS,
+                current.activeOnline());
+        return cache.replace(id, current, updated);
+    }
+
     public void putAll(Map<UUID, PlayerData> map) {
         long exp = System.currentTimeMillis() + TTL_MS;
         map.forEach((k, v) -> {

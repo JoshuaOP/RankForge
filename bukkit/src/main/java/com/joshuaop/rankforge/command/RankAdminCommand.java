@@ -414,8 +414,10 @@ public class RankAdminCommand {
 
         Player online = Bukkit.getPlayer(targetName);
         if (online != null) {
-            plugin.getApi().setRank(online, rankId, s);
-            s.sendMessage("§a✔ Force-set §e" + online.getName() + "§a's rank to §e" + rankId + "§a.");
+            boolean ok = plugin.getApi().setRank(online, rankId, s);
+            s.sendMessage(ok
+                    ? "§a✔ Force-set §e" + online.getName() + "§a's rank to §e" + rankId + "§a."
+                    : "§c✘ Rank change could not be completed.");
             return;
         }
 
@@ -503,22 +505,37 @@ public class RankAdminCommand {
                 UUID targetUuid = resolvedUuid;
 
                 CacheManager cache = plugin.getRankManager().getCacheManager();
-                PlayerData current = cache.get(targetUuid);
-                if (current == null) {
-                    current = plugin.getRankManager().getRepository().load(targetUuid, targetName);
+                PlayerData updated = null;
+                String prevRank = null;
+                boolean saved = false;
+
+                // A login, quit save, or another admin update may publish a newer
+                // record while this task is running.  Never replace that record
+                // with the snapshot captured by an older attempt.
+                for (int attempt = 0; attempt < 4 && !saved; attempt++) {
+                    PlayerData current = cache.getRaw(targetUuid);
+                    if (current == null) {
+                        current = plugin.getRankManager().getRepository()
+                                .load(targetUuid, targetName);
+                    }
+                    if (current == null) break;
+
+                    PlayerData candidate = current.withRank(rankId);
+                    if (!cache.compareAndSet(targetUuid, current, candidate)) continue;
+                    if (plugin.getRankManager().getRepository().save(candidate)) {
+                        updated = candidate;
+                        prevRank = current.rankId();
+                        saved = true;
+                    } else {
+                        cache.compareAndSet(targetUuid, candidate, current);
+                    }
                 }
 
-                if (current == null) {
+                if (!saved) {
                     Bukkit.getScheduler().runTask(plugin, () ->
-                            s.sendMessage("§c✘ Could not load data for §e" + targetName + "§c."));
+                            s.sendMessage("§c✘ Could not safely save the rank change for §e"
+                                    + targetName + "§c."));
                     return;
-                }
-
-                String prevRank    = current.rankId();
-                PlayerData updated = current.withRank(rankId);
-                cache.put(targetUuid, updated);
-                if (!plugin.getRankManager().getRepository().save(updated)) {
-                    throw new IllegalStateException("storage did not confirm the rank change");
                 }
 
                 if (plugin.getHistoryManager() != null) {
@@ -535,7 +552,7 @@ public class RankAdminCommand {
                                     ct, System.currentTimeMillis()));
                 }
 
-                final String finalRank    = rankId;
+                final String finalRank    = updated.rankId();
                 final String finalPrev    = prevRank;
                 final UUID   finalUuid    = targetUuid;
                 final String finalCTLabel = changeType.equals("RESET") ? "reset" : "set";
@@ -546,8 +563,17 @@ public class RankAdminCommand {
                             + finalRank + "§a. (was §7" + finalPrev + "§a)");
                     Player nowOnline = Bukkit.getPlayer(finalUuid);
                     if (nowOnline != null) {
-                        nowOnline.sendMessage("§6[RankForge] §7An admin has "
-                                + finalCTLabel + " your rank to §e" + finalRank + "§7.");
+                        PlayerData latest = plugin.getRankManager().getCacheManager()
+                                .getRaw(finalUuid);
+                        if (latest != null && latest.rankId().equals(finalRank)) {
+                            if (!plugin.getSoftDependency().applyRankPermissions(
+                                    nowOnline, null, finalRank)) {
+                                plugin.getLogger().warning("Could not synchronize permissions "
+                                        + "after offline rank change for " + finalUuid + ".");
+                            }
+                            nowOnline.sendMessage("§6[RankForge] §7An admin has "
+                                    + finalCTLabel + " your rank to §e" + finalRank + "§7.");
+                        }
                     }
                 });
             } catch (Exception e) {

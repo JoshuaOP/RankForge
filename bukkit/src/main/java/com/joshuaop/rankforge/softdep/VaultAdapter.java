@@ -53,6 +53,14 @@ class VaultAdapter {
         } catch (Exception e) { return false; }
     }
 
+    boolean refund(Player player, double amount) {
+        if (player == null || !Double.isFinite(amount) || amount <= 0.0) return false;
+        try {
+            var response = economy.depositPlayer(player, amount);
+            return response != null && response.transactionSuccess();
+        } catch (Exception e) { return false; }
+    }
+
     void setBalance(OfflinePlayer player, double targetAmount) {
         try {
             double current = economy.getBalance(player);

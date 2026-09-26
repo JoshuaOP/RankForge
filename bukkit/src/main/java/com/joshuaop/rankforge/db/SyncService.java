@@ -4,6 +4,9 @@ import com.joshuaop.rankforge.RankForge;
 import org.bukkit.scheduler.BukkitTask;
 
 import java.sql.SQLException;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Periodically flushes cached player data to MySQL asynchronously.
@@ -18,12 +21,16 @@ public class SyncService {
     private final RankForge plugin;
     private BukkitTask      task;
     private BukkitTask      recoveryTask;
+    private final AtomicBoolean recoveryInProgress = new AtomicBoolean(false);
+    private volatile long nextRecoveryAttemptAtMillis;
+    private volatile long recoveryBackoffTicks;
 
     public SyncService(RankForge plugin) {
         this.plugin = plugin;
     }
 
     public void start() {
+        if (task != null && !task.isCancelled()) return;
         long interval = plugin.getConfig().getLong("sync.interval-ticks", 200L);
 
         // Snapshot live Bukkit state on the main thread. Only immutable
@@ -67,46 +74,77 @@ public class SyncService {
         if (!plugin.getDatabaseManager().isMysqlConfigured()) return;
         long interval = Math.max(200L,
                 plugin.getConfig().getLong("sync.interval-ticks", 200L) * 3L);
+        recoveryBackoffTicks = interval;
         recoveryTask = plugin.getServer().getScheduler().runTaskTimerAsynchronously(
                 plugin, this::attemptMySQLRecovery, interval, interval);
     }
 
     private void attemptMySQLRecovery() {
-        if (plugin.getDatabaseManager().isConnected()) return;
-        if (!plugin.getDatabaseManager().reconnect()) return;
+        if (!recoveryInProgress.compareAndSet(false, true)) return;
+        try {
+            if (plugin.getDatabaseManager().isConnected()) return;
+            long now = System.currentTimeMillis();
+            if (now < nextRecoveryAttemptAtMillis) return;
 
-        YamlPlayerDataStorage yaml = plugin.getYamlPlayerDataStorage();
-        if (yaml == null) return;
-
-        boolean recovered = true;
-        for (PlayerData data : yaml.loadAll()) {
-            if (!getRepository().save(data)) {
-                recovered = false;
-                break;
+            if (!plugin.getDatabaseManager().reconnect()) {
+                scheduleRecoveryRetry(now);
+                return;
             }
-        }
 
-        if (recovered) {
+            YamlPlayerDataStorage yaml = plugin.getYamlPlayerDataStorage();
+            if (yaml == null) {
+                plugin.getDatabaseManager().markUnavailable(
+                        new SQLException("YAML recovery source is unavailable."));
+                scheduleRecoveryRetry(now);
+                return;
+            }
+
+            // A UUID can exist in both sources.  Merge first so recovery writes
+            // each record once; cache is the live in-memory source of truth when
+            // it contains a valid record, matching normal save semantics.
+            Map<java.util.UUID, PlayerData> snapshots = new LinkedHashMap<>();
+            for (PlayerData data : yaml.loadAll()) {
+                if (data != null && data.isValidFor(data.uuid())) {
+                    snapshots.put(data.uuid(), data);
+                }
+            }
             CacheManager cache = getCache();
             if (cache != null) {
                 for (CacheManager.Entry entry : cache.getCache().values()) {
                     PlayerData data = entry.data();
-                    if (data != null && !getRepository().save(data)) {
-                        recovered = false;
-                        break;
+                    if (data != null && data.isValidFor(data.uuid())) {
+                        snapshots.put(data.uuid(), data);
                     }
                 }
             }
-        }
 
-        if (!recovered) {
-            plugin.getDatabaseManager().markUnavailable(
-                    new SQLException("MySQL recovery snapshot was not fully persisted."));
-        } else {
+            for (PlayerData data : snapshots.values()) {
+                if (!getRepository().saveForRecovery(data)) {
+                    plugin.getDatabaseManager().markUnavailable(
+                            new SQLException("MySQL recovery snapshot was not fully persisted."));
+                    scheduleRecoveryRetry(now);
+                    return;
+                }
+            }
+
             plugin.getDatabaseManager().finishRecovery();
+            recoveryBackoffTicks = Math.max(200L,
+                    plugin.getConfig().getLong("sync.interval-ticks", 200L) * 3L);
+            nextRecoveryAttemptAtMillis = 0L;
             plugin.getLogger().info("MySQL recovery verified; newest YAML/cache snapshots "
                     + "were persisted before failover ended.");
+            // If MySQL was unavailable during startup, the normal flush task was
+            // never created.  Resume it only after recovery has been verified.
+            start();
+        } finally {
+            recoveryInProgress.set(false);
         }
+    }
+
+    private void scheduleRecoveryRetry(long nowMillis) {
+        long delayTicks = Math.max(200L, recoveryBackoffTicks);
+        nextRecoveryAttemptAtMillis = nowMillis + delayTicks * 50L;
+        recoveryBackoffTicks = Math.min(delayTicks * 2L, 20L * 60L * 10L);
     }
 
     public void stop() {

@@ -14,6 +14,8 @@ import org.bukkit.event.player.PlayerQuitEvent;
 
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
 import org.bukkit.permissions.PermissionAttachment;
 
 /**
@@ -144,6 +146,11 @@ public class SoftDependency implements Listener {
         return vaultAdapter.withdraw(player, amount);
     }
 
+    public boolean refund(Player player, double amount) {
+        if (vaultAdapter == null) return false;
+        return vaultAdapter.refund(player, amount);
+    }
+
     /**
      * Set an offline/online player's Vault balance to an exact amount.
      */
@@ -184,39 +191,55 @@ public class SoftDependency implements Listener {
             try {
                 var operation = luckPermsHook.applyPermissions(player, model);
                 if (operation == null) return false;
-                operation.whenComplete((ignored, error) -> {
-                    if (error != null) {
-                        plugin.getLogger().log(java.util.logging.Level.WARNING,
-                                "LuckPerms rank permission update failed for "
-                                        + player.getUniqueId(), error);
-                    }
-                });
+                // LuckPerms modifies users asynchronously.  Returning here would
+                // let RankService persist a rank before the permission update was
+                // actually accepted.  The operation itself does not access Bukkit
+                // objects, so waiting for its bounded completion is safe.
+                operation.get(10, TimeUnit.SECONDS);
                 return true;
             } catch (RuntimeException e) {
-                plugin.getLogger().log(java.util.logging.Level.WARNING,
+                plugin.getLogger().log(Level.WARNING,
                         "Could not apply RankForge LuckPerms permissions for "
                                 + player.getName(), e);
                 return false;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                plugin.getLogger().log(Level.WARNING,
+                        "Interrupted while applying LuckPerms permissions for "
+                                + player.getName(), e);
+                return false;
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.WARNING,
+                        "LuckPerms rank permission update failed for "
+                                + player.getUniqueId(), e);
+                return false;
             }
         } else {
-            PermissionAttachment previous = rankAttachments.remove(player.getUniqueId());
-            if (previous != null) {
-                try {
-                    previous.remove();
-                } catch (IllegalArgumentException e) {
-                    plugin.getLogger().warning("Could not remove RankForge permissions for "
-                            + player.getName() + ": " + e.getMessage());
-                }
-            }
-            if (model == null || model.getPermissions().isEmpty()) return true;
+            PermissionAttachment previous = rankAttachments.get(player.getUniqueId());
+            PermissionAttachment attachment = null;
             try {
-                PermissionAttachment attachment = player.addAttachment(plugin);
-                for (String perm : model.getPermissions()) {
-                    if (perm != null && !perm.isBlank()) attachment.setPermission(perm, true);
+                attachment = player.addAttachment(plugin);
+                if (model != null) {
+                    for (String perm : model.getPermissions()) {
+                        if (perm != null && !perm.isBlank()) attachment.setPermission(perm, true);
+                    }
+                }
+                if (previous != null) {
+                    try {
+                        previous.remove();
+                    } catch (RuntimeException e) {
+                        try { attachment.remove(); } catch (Exception ignored) {}
+                        throw e;
+                    }
                 }
                 rankAttachments.put(player.getUniqueId(), attachment);
                 return true;
             } catch (RuntimeException e) {
+                if (attachment != null) {
+                    try { attachment.remove(); } catch (Exception ignored) {}
+                }
+                if (previous == null) rankAttachments.remove(player.getUniqueId());
+                else rankAttachments.put(player.getUniqueId(), previous);
                 plugin.getLogger().log(java.util.logging.Level.WARNING,
                         "Could not apply RankForge permissions for " + player.getName(), e);
                 return false;

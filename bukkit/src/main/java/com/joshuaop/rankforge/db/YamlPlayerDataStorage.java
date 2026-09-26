@@ -247,7 +247,10 @@ public class YamlPlayerDataStorage {
                 String defaultRank = plugin.getRankManager() != null
                         ? plugin.getRankManager().getDefaultRankId() : "Guest";
                 PlayerData def = PlayerData.defaultData(uuid, playerName, defaultRank);
-                savePlayer(def);
+                // Loading can happen on the database/recovery executor.  Do not call
+                // savePlayer() here: it snapshots live Bukkit state and is main-thread
+                // only.  The caller publishes this new-player record to the cache, and
+                // the normal main-thread YAML sync persists it safely.
                 return def;
             }
 
