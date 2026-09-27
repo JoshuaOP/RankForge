@@ -26,7 +26,7 @@ public class MySQLProvider {
         this.db = db;
     }
 
-    public void createTables() {
+    public void createTables() throws SQLException {
         String createPlayers = """
                 CREATE TABLE IF NOT EXISTS rf_players (
                     uuid              VARCHAR(36)  PRIMARY KEY,
@@ -58,9 +58,6 @@ public class MySQLProvider {
              Statement stmt = conn.createStatement()) {
             stmt.execute(createPlayers);
             stmt.execute(createRankLog);
-        } catch (SQLException e) {
-            RankForge.getInstance().getLogger().severe(
-                    "Failed to create MySQL tables: " + e.getMessage());
         }
 
         // Safe column migrations for existing installations using INFORMATION_SCHEMA checks
@@ -73,7 +70,8 @@ public class MySQLProvider {
      * Idempotent ALTER TABLE — only adds the column if it does not already exist.
      * Uses INFORMATION_SCHEMA for maximum MySQL version compatibility.
      */
-    private void addColumnIfMissing(String table, String column, String definition) {
+    private void addColumnIfMissing(String table, String column, String definition)
+            throws SQLException {
         String check = """
                 SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
                 WHERE TABLE_SCHEMA = DATABASE()
@@ -91,10 +89,6 @@ public class MySQLProvider {
                     stmt.execute(alter);
                 }
             }
-        } catch (SQLException e) {
-            RankForge.getInstance().getLogger().warning(
-                    "Column migration check failed (" + table + "." + column + "): "
-                            + e.getMessage());
         }
     }
 

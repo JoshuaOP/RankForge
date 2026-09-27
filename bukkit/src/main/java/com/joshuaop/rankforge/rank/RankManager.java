@@ -2,7 +2,10 @@ package com.joshuaop.rankforge.rank;
 
 import com.joshuaop.rankforge.RankForge;
 import com.joshuaop.rankforge.db.CacheManager;
+import com.joshuaop.rankforge.db.DatabaseManager;
+import com.joshuaop.rankforge.db.PlayerData;
 import com.joshuaop.rankforge.db.RankDataRepository;
+import com.joshuaop.rankforge.db.YamlPlayerDataStorage;
 
 import java.util.*;
 
@@ -29,7 +32,6 @@ public class RankManager {
 
     public void loadRanks() {
         synchronized (lock) {
-            // REVISION: Pulled configuration pulling inside the lock block to guarantee atomic lifecycle state
             if (plugin.getRankYamlManager() != null && plugin.getRankYamlManager().getConfig() != null) {
                 String yamlDefault = plugin.getRankYamlManager().getConfig().getString("default-rank", "Guest");
                 this.defaultRankId = (yamlDefault == null || yamlDefault.isBlank()) ? "Guest" : yamlDefault;
@@ -43,6 +45,54 @@ public class RankManager {
             
             if (plugin.isDebug()) {
                 plugin.getLogger().info("Indexed " + this.ranks.size() + " ranks.");
+            }
+        }
+    }
+
+    /**
+     * Synchronously flushes all cached player data during server shutdown.
+     *
+     * <p>Uses {@link DatabaseManager#isReadyForReads()} instead of {@code isConnected()}
+     * to prevent writing to a database that is undergoing active recovery or broken.
+     * If MySQL is unavailable or recovering, all cached records fall back directly to
+     * {@link YamlPlayerDataStorage}.
+     */
+    public void flushNow() {
+        plugin.getLogger().info("[RankForge] Flushing all cached player data for server shutdown...");
+
+        Collection<PlayerData> snapshots = cacheManager.snapshotOnlineAndUnexpired();
+        DatabaseManager dbManager = plugin.getDatabaseManager();
+        YamlPlayerDataStorage yamlStorage = plugin.getYamlPlayerDataStorage();
+
+        boolean safeForMySQL = dbManager != null && dbManager.isReadyForReads();
+
+        if (safeForMySQL) {
+            plugin.getLogger().info("[RankForge] Flushing " + snapshots.size() + " player records to MySQL...");
+            int successCount = 0;
+
+            for (PlayerData data : snapshots) {
+                if (repository.save(data)) {
+                    successCount++;
+                } else if (yamlStorage != null) {
+                    // Fallback individual record to YAML if a single MySQL write fails
+                    yamlStorage.savePlayerForEmergencyFallback(data);
+                }
+            }
+            plugin.getLogger().info("[RankForge] Successfully saved " + successCount + "/" + snapshots.size() + " records to MySQL.");
+        } else {
+            plugin.getLogger().warning("[RankForge] MySQL is not ready during shutdown (recovering or disconnected). "
+                    + "Flushing all " + snapshots.size() + " player records directly to YAML storage.");
+
+            if (yamlStorage != null) {
+                int yamlCount = 0;
+                for (PlayerData data : snapshots) {
+                    if (yamlStorage.savePlayerForEmergencyFallback(data)) {
+                        yamlCount++;
+                    }
+                }
+                plugin.getLogger().info("[RankForge] Emergency shutdown save complete: " + yamlCount + "/" + snapshots.size() + " saved to YAML.");
+            } else {
+                plugin.getLogger().severe("[RankForge] CRITICAL: YamlPlayerDataStorage is uninitialized during shutdown! Data loss prevention failed.");
             }
         }
     }
@@ -73,14 +123,12 @@ public class RankManager {
         return defaultRankId; 
     }
 
-    // REVISION: Returns an isolated snapshot array list to avoid ConcurrentModificationExceptions asynchronously
     public Collection<RankModel> getModelList() {
         synchronized (lock) {
             return new ArrayList<>(ranks.values());
         }
     }
 
-    // REVISION: Returns an isolated snapshot hash set to avoid ConcurrentModificationExceptions asynchronously
     public Set<String> getRankIds() {
         synchronized (lock) {
             return new HashSet<>(ranks.keySet());
@@ -98,7 +146,6 @@ public class RankManager {
     public RankModel getRankAtSlot(int slot) {
         synchronized (lock) {
             for (RankModel rank : ranks.values()) {
-                // RankModel is non-null guaranteed by our updated builder framework
                 if (rank.getSlot() == slot) {
                     return rank;
                 }
@@ -143,7 +190,7 @@ public class RankManager {
             synchronized (lock) {
                 fallback = ranks.isEmpty() ? null : ranks.keySet().iterator().next();
                 if (fallback != null) {
-                    this.defaultRankId = fallback; // REVISION: Permanently heal misconfigured layouts
+                    this.defaultRankId = fallback;
                 }
             }
         }
@@ -151,7 +198,6 @@ public class RankManager {
 
         final String effectiveFallback = fallback;
         
-        // REVISION: Ensure the condition check runs against the locked map safely via our accessor method
         cacheManager.repairOrphanedRankIds(rankId -> getRank(rankId) != null, effectiveFallback);
 
         if (plugin.isDebug()) {

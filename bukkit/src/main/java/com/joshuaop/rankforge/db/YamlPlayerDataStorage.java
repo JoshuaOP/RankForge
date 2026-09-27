@@ -208,9 +208,6 @@ public class YamlPlayerDataStorage {
 
     /**
      * v3 → v4: add playtime-minutes field defaulting to 0 for all existing entries.
-     * No conversion from the old vanilla PLAY_ONE_MINUTE statistic is performed because
-     * the tick-based stat is inherently inaccurate and would propagate that error forward.
-     * Players simply begin accumulating real-world playtime from this point onward.
      */
     private void migrateV3ToV4(YamlConfiguration target) {
         ConfigurationSection players = target.getConfigurationSection("players");
@@ -225,7 +222,7 @@ public class YamlPlayerDataStorage {
 
     /**
      * v4 → v5: add completed-requirements field defaulting to an empty list for all
-     * existing entries. No conversion is required since this is a brand-new field.
+     * existing entries.
      */
     private void migrateV4ToV5(YamlConfiguration target) {
         ConfigurationSection players = target.getConfigurationSection("players");
@@ -246,12 +243,7 @@ public class YamlPlayerDataStorage {
             if (!yaml.contains(path)) {
                 String defaultRank = plugin.getRankManager() != null
                         ? plugin.getRankManager().getDefaultRankId() : "Guest";
-                PlayerData def = PlayerData.defaultData(uuid, playerName, defaultRank);
-                // Loading can happen on the database/recovery executor.  Do not call
-                // savePlayer() here: it snapshots live Bukkit state and is main-thread
-                // only.  The caller publishes this new-player record to the cache, and
-                // the normal main-thread YAML sync persists it safely.
-                return def;
+                return PlayerData.defaultData(uuid, playerName, defaultRank);
             }
 
             ConfigurationSection section = yaml.getConfigurationSection(path);
@@ -281,10 +273,8 @@ public class YamlPlayerDataStorage {
 
     /**
      * Saves one already-created player snapshot and waits for the atomic async write.
-     * This is used only by the MySQL emergency fallback so its log can distinguish a
-     * successful YAML write from a failed one.
      */
-    boolean savePlayerForEmergencyFallback(PlayerData data) {
+    public boolean savePlayerForEmergencyFallback(PlayerData data) {
         final long requestGeneration;
         synchronized (writeLock) {
             requestGeneration = ++writeGeneration;
@@ -324,10 +314,6 @@ public class YamlPlayerDataStorage {
         return succeeded.get();
     }
 
-    /**
-     * Waits for previously queued YAML file writes to finish. Intended for lifecycle
-     * boundaries where the plugin must not return before its final save is durable.
-     */
     public void awaitPendingWrites() {
         if (!Bukkit.isPrimaryThread()) {
             throw new IllegalStateException("YAML writes must be awaited from the main thread.");
@@ -343,20 +329,12 @@ public class YamlPlayerDataStorage {
         }
     }
 
-    /**
-     * Prevents new YAML saves from being queued while allowing the current writer task and
-     * its pending snapshot to finish. This must be called before the writer is shut down.
-     */
     public void beginShutdown() {
         synchronized (writeLock) {
             acceptingWrites = false;
         }
     }
 
-    /**
-     * Marks the Bukkit-backed writer as no longer needed after all pending work has drained.
-     * Bukkit owns the underlying scheduler, so there is no separate executor to terminate here.
-     */
     public void shutdownWriter() {
         synchronized (writeLock) {
             if (asyncWriteScheduled || pendingSnapshot != null || inFlightSnapshot != null) {
@@ -396,8 +374,6 @@ public class YamlPlayerDataStorage {
                         Thread.currentThread().interrupt();
                         break;
                     }
-                    // Shutdown must still drain the already-submitted write. Restore the
-                    // interrupt status after the write has completed.
                     interrupted = true;
                 }
             }
@@ -455,11 +431,11 @@ public class YamlPlayerDataStorage {
         target.set(path + ".completed-requirements", new ArrayList<>(data.completedRequirements()));
     }
 
-    private synchronized SaveOperation savePlayerOnMain(PlayerData input) {
+    private SaveOperation savePlayerOnMain(PlayerData input) {
         return savePlayerOnMain(input, null);
     }
 
-    private synchronized SaveOperation savePlayerOnMain(
+    private SaveOperation savePlayerOnMain(
             PlayerData input,
             Long emergencyRequestGeneration
     ) {
@@ -487,7 +463,7 @@ public class YamlPlayerDataStorage {
         }
     }
 
-    private synchronized SaveOperation saveAllOnMain(List<PlayerData> inputs) {
+    private SaveOperation saveAllOnMain(List<PlayerData> inputs) {
         requireMainThread();
         if (!isAcceptingWrites()) {
             logger.warning("Ignoring YAML player save batch because shutdown has started.");
@@ -516,9 +492,6 @@ public class YamlPlayerDataStorage {
             List<UUID> affectedUuids,
             Long requestedGeneration
     ) {
-        // YamlConfiguration is only touched on the main thread. The immutable,
-        // already-serialized YAML text captures the complete document, including
-        // records not in this save batch.
         SaveOperation operation = new SaveOperation();
         YamlSaveSnapshot snapshot;
         try {
@@ -594,10 +567,6 @@ public class YamlPlayerDataStorage {
         }
     }
 
-    /**
-     * The async writer deliberately uses only the already serialized snapshot and
-     * Java file I/O. It does not touch Bukkit, Vault, players, or live PlayerData.
-     */
     private void drainAsyncWrites(long token) {
         long retryToken = 0L;
         long retryDelay = 0L;
@@ -621,8 +590,6 @@ public class YamlPlayerDataStorage {
                 try {
                     succeeded = writeSnapshot(snapshot.yamlContent(), snapshot.affectedUuids());
                 } catch (Throwable t) {
-                    // Keep the tracking state releasable even if an unexpected writer
-                    // failure escapes the normal file-I/O handling.
                     succeeded = false;
                     logger.log(Level.SEVERE, "Unexpected failure while saving playerdata.yml"
                             + affectedContext(snapshot.affectedUuids()) + ".", t);
@@ -633,8 +600,6 @@ public class YamlPlayerDataStorage {
                         consecutiveWriteFailures = 0;
                         completeOperations(snapshot, true);
                     } else {
-                        // If a newer document is queued, it supersedes the failed bytes but
-                        // carries the failed operation until that newer document is durable.
                         pendingSnapshot = mergeFailedSnapshot(snapshot, pendingSnapshot);
                         consecutiveWriteFailures++;
                         if (consecutiveWriteFailures > MAX_AUTOMATIC_RETRIES) {
@@ -765,11 +730,6 @@ public class YamlPlayerDataStorage {
         return " for players " + affectedUuids;
     }
 
-    /**
-     * Recovers a pending snapshot without Bukkit. This is intentionally used only
-     * after scheduling has failed or a bounded lifecycle wait has expired; normal
-     * saves continue to use the asynchronous Bukkit writer.
-     */
     private boolean recoverPendingWritesSynchronously() {
         YamlSaveSnapshot snapshot;
         synchronized (writeLock) {
@@ -794,16 +754,8 @@ public class YamlPlayerDataStorage {
         }
     }
 
-    /**
-     * Emergency-only direct write for a pre-built PlayerData snapshot. It does not
-     * inspect Bukkit or live players, so a broken main-thread scheduler cannot make
-     * the MySQL-to-YAML fallback wait forever.
-     */
     private boolean saveEmergencyPlayerDirect(PlayerData data, long requestGeneration) {
         synchronized (writeLock) {
-            // A direct write cannot safely run while the Bukkit writer has bytes
-            // in flight: those older bytes could land after this write. Let the
-            // normal writer finish instead of risking a stale overwrite.
             clearCancelledWriterLocked();
             if (inFlightSnapshot != null || asyncWriteScheduled) {
                 logger.warning("Deferring direct YAML emergency write for " + data.uuid()
@@ -832,9 +784,6 @@ public class YamlPlayerDataStorage {
                 boolean succeeded = writeSnapshot(
                         emergencyContent, List.of(data.uuid()));
                 if (succeeded && pendingSnapshot != null) {
-                    // The emergency document was based on the pending document
-                    // and is now newer for the affected UUIDs. It supersedes
-                    // that queued document, so its waiters can complete safely.
                     completeOperations(pendingSnapshot, true);
                     pendingSnapshot = null;
                     writeLock.notifyAll();
@@ -910,10 +859,6 @@ public class YamlPlayerDataStorage {
         }
     }
 
-    /**
-     * Stitches live XP, Vault balance, block-break count, and playtime for online players
-     * so saves always reflect the current session state.
-     */
     private PlayerData stitchRuntimeData(PlayerData data) {
         Player player = Bukkit.getPlayer(data.uuid());
         if (player == null || !player.isOnline()) return data;

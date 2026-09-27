@@ -7,9 +7,12 @@ import com.joshuaop.rankforge.rank.RankModel;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.SocketTimeoutException;
 import java.nio.charset.StandardCharsets;
-import java.util.Collection;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 /**
@@ -40,11 +43,17 @@ import java.util.logging.Logger;
  */
 public class RestAPIServer {
 
-    private final RankForge plugin;
-    private final Logger    log;
-    private       Thread    serverThread;
-    private       ServerSocket serverSocket;
-    private volatile boolean running = false;
+    private static final int CLIENT_SOCKET_TIMEOUT_MS = 5000;
+    private static final int MAX_WORKER_THREADS = 10;
+
+    private final RankForge       plugin;
+    private final Logger          log;
+    private       Thread          serverThread;
+    private       ServerSocket    serverSocket;
+    private       ExecutorService clientExecutor;
+    private volatile boolean      running = false;
+
+    private record HttpResponse(int status, String body) {}
 
     public RestAPIServer(RankForge plugin) {
         this.plugin = plugin;
@@ -58,9 +67,19 @@ public class RestAPIServer {
         if (!plugin.getConfig().getBoolean("rest-api.enabled", false)) return;
         int port = plugin.getConfig().getInt("rest-api.port", 4567);
 
+        String token = plugin.getConfig().getString("rest-api.token", "");
+        if (token.isBlank()) {
+            log.warning("[REST] WARNING: REST API is enabled without an authentication token! Endpoints are unauthenticated.");
+        }
+
         try {
-            serverSocket = new ServerSocket(port);
-            running      = true;
+            serverSocket   = new ServerSocket(port);
+            clientExecutor = Executors.newFixedThreadPool(MAX_WORKER_THREADS, r -> {
+                Thread t = new Thread(r, "RankForge-REST-Worker");
+                t.setDaemon(true);
+                return t;
+            });
+            running = true;
         } catch (IOException e) {
             log.warning("[REST] Failed to bind on port " + port + ": " + e.getMessage());
             return;
@@ -71,7 +90,8 @@ public class RestAPIServer {
             while (running) {
                 try {
                     Socket client = serverSocket.accept();
-                    new Thread(() -> handleClient(client)).start();
+                    client.setSoTimeout(CLIENT_SOCKET_TIMEOUT_MS);
+                    clientExecutor.submit(() -> handleClient(client));
                 } catch (IOException e) {
                     if (running) log.warning("[REST] Accept error: " + e.getMessage());
                 }
@@ -81,12 +101,22 @@ public class RestAPIServer {
         serverThread.start();
     }
 
-    /** Stop the REST API server. */
+    /** Stop the REST API server and worker threads. */
     public void stop() {
         running = false;
         if (serverSocket != null && !serverSocket.isClosed()) {
             try { serverSocket.close(); }
             catch (IOException ignored) {}
+        }
+        if (clientExecutor != null) {
+            clientExecutor.shutdownNow();
+            try {
+                if (!clientExecutor.awaitTermination(3, TimeUnit.SECONDS)) {
+                    log.warning("[REST] Worker pool did not terminate cleanly within timeout.");
+                }
+            } catch (InterruptedException ignored) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
@@ -130,27 +160,27 @@ public class RestAPIServer {
                 return;
             }
 
-            String body = route(path);
-            if (body == null) {
-                sendResponse(out, 404, "application/json", "{\"error\":\"Not Found\"}");
-            } else {
-                sendResponse(out, 200, "application/json", body);
-            }
+            HttpResponse response = route(path);
+            sendResponse(out, response.status(), "application/json", response.body());
 
+        } catch (SocketTimeoutException e) {
+            log.fine("[REST] Client read timed out.");
         } catch (Exception e) {
             log.fine("[REST] Client error: " + e.getMessage());
         }
     }
 
-    private String route(String path) {
-        if (path.equals("/api/status"))     return buildStatus();
-        if (path.equals("/api/ranks"))      return buildRanks();
+    private HttpResponse route(String path) {
+        if (path.equals("/api/status")) return new HttpResponse(200, buildStatus());
+        if (path.equals("/api/ranks"))  return new HttpResponse(200, buildRanks());
         if (path.startsWith("/api/player/")) {
             String uuidStr = path.substring("/api/player/".length());
-            if (uuidStr.isBlank()) return null; // returns 404 Not Found
-            return buildPlayer(uuidStr);
+            if (uuidStr.isBlank()) {
+                return new HttpResponse(400, "{\"error\":\"Missing player UUID parameter\"}");
+            }
+            return buildPlayerResponse(uuidStr);
         }
-        return null;
+        return new HttpResponse(404, "{\"error\":\"Not Found\"}");
     }
 
     // ── JSON builders ─────────────────────────────────────────────────────────
@@ -182,19 +212,22 @@ public class RestAPIServer {
         return sb.toString();
     }
 
-    private String buildPlayer(String uuidStr) {
+    private HttpResponse buildPlayerResponse(String uuidStr) {
         try {
             UUID uuid = UUID.fromString(uuidStr);
             PlayerData data = plugin.getRankManager().getCacheManager().get(uuid);
-            if (data == null) return "{\"error\":\"Player not found in cache\"}";
-            return "{\"uuid\":\"" + escape(data.uuid().toString()) + "\","
+            if (data == null) {
+                return new HttpResponse(404, "{\"error\":\"Player not found in cache\"}");
+            }
+            String body = "{\"uuid\":\"" + escape(data.uuid().toString()) + "\","
                     + "\"name\":\"" + escape(data.playerName()) + "\","
                     + "\"rank\":\"" + escape(data.rankId()) + "\","
                     + "\"experience\":" + data.experience() + ","
                     + "\"money\":" + data.money()
                     + "}";
+            return new HttpResponse(200, body);
         } catch (IllegalArgumentException e) {
-            return "{\"error\":\"Invalid UUID\"}";
+            return new HttpResponse(400, "{\"error\":\"Invalid UUID format\"}");
         }
     }
 
@@ -216,6 +249,7 @@ public class RestAPIServer {
     private String statusText(int code) {
         return switch (code) {
             case 200 -> "OK";
+            case 400 -> "Bad Request";
             case 401 -> "Unauthorized";
             case 404 -> "Not Found";
             case 405 -> "Method Not Allowed";

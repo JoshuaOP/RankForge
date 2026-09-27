@@ -121,36 +121,26 @@ public final class RankForge extends JavaPlugin {
     public void onDisable() {
         getLogger().info("RankForge shutdown beginning.");
 
-        // Shutdown networking and schedules immediately to prevent async state corruption
+        // Stop networking, schedules, and active background tasks
         if (restAPIServer      != null) restAPIServer.stop();
         if (expansionRegistry  != null) expansionRegistry.disableAll();
         if (performanceManager != null) performanceManager.stop();
         if (taskScheduler      != null) taskScheduler.cancelAll();
         if (cosmeticManager    != null) cosmeticManager.shutdown();
 
-        // Flush live counters into cache before saving
+        // Flush live event counters into cache before saving
         if (blockBreakTracker  != null) blockBreakTracker.flushAll();
         if (playtimeTracker    != null) playtimeTracker.flushAll();
 
-        if (rankManager != null && rankManager.getCacheManager() != null) {
-            if (syncService != null && databaseManager != null && databaseManager.isConnected()) {
-                // Stop future MySQL flushes before performing the final synchronous flush.
-                syncService.stop();
-                try {
-                    syncService.flushNow();
-                } catch (Exception e) {
-                    getLogger().severe("SQL pipeline flush failed, attempting emergency YAML writeback: " + e.getMessage());
-                    if (yamlPlayerDataStorage != null) {
-                        yamlPlayerDataStorage.saveAll(rankManager.getCacheManager().snapshotOnlineAndUnexpired());
-                    }
-                }
-            } else if (yamlPlayerDataStorage != null) {
-                yamlPlayerDataStorage.saveAll(rankManager.getCacheManager().snapshotOnlineAndUnexpired());
-            }
+        // Stop async batch flushes before executing final synchronous shutdown save
+        if (syncService != null) syncService.stop();
+
+        // Delegate to RankManager's safe flush (checks isReadyForReads() and falls back to YAML)
+        if (rankManager != null) {
+            rankManager.flushNow();
         }
+
         if (yamlPlayerDataStorage != null) {
-            // The final save above is now submitted. Reject any later saves, let this
-            // already-submitted work finish, and only then mark the writer shut down.
             yamlPlayerDataStorage.beginShutdown();
             yamlPlayerDataStorage.awaitPendingWrites();
             yamlPlayerDataStorage.shutdownWriter();
@@ -173,10 +163,17 @@ public final class RankForge extends JavaPlugin {
     }
 
     private void initDatabase() {
-        databaseManager       = new DatabaseManager(this);
-        boolean mysqlOk       = databaseManager.connect();
+        // Always initialize local YAML storage first so it serves as an active standby mirror
         yamlPlayerDataStorage = new YamlPlayerDataStorage(this);
 
+        databaseManager = new DatabaseManager(this);
+        boolean mysqlOk = databaseManager.connect();
+
+        if (mysqlOk) {
+            getLogger().info("Successfully established connection to MySQL.");
+        } else {
+            getLogger().warning("Could not connect to MySQL. Operating in local YAML mode.");
+        }
     }
 
     private void initYaml() {
@@ -189,11 +186,14 @@ public final class RankForge extends JavaPlugin {
         rankManager = new RankManager(this);
         rankManager.loadRanks();
 
-        if (databaseManager != null && !databaseManager.isConnected() && yamlPlayerDataStorage != null) {
+        // Warm up cache from local YAML records as an initial baseline
+        if (yamlPlayerDataStorage != null) {
             var stored = yamlPlayerDataStorage.loadAll();
             if (stored != null) {
                 for (var pd : stored) {
-                    rankManager.getCacheManager().put(pd.uuid(), pd);
+                    if (!rankManager.getCacheManager().contains(pd.uuid())) {
+                        rankManager.getCacheManager().put(pd.uuid(), pd);
+                    }
                 }
             }
         }
@@ -305,24 +305,21 @@ public final class RankForge extends JavaPlugin {
             if (blockBreakTracker != null) blockBreakTracker.flushAll();
         }, blockFlushInterval, blockFlushInterval);
 
-        // Flush playtime on the same interval as block-breaks for consistency
         taskScheduler.repeatAsync(() -> {
             if (playtimeTracker != null) playtimeTracker.flushAll();
         }, blockFlushInterval, blockFlushInterval);
 
-        if (databaseManager != null && !databaseManager.isConnected()) {
-            long yamlSyncInterval = getConfig() != null
-                    ? getConfig().getLong("sync.interval-ticks", 200L) : 200L;
-            // Snapshot live cache/Vault/player state on the main thread. The storage
-            // layer serializes that snapshot before dispatching file I/O asynchronously.
-            taskScheduler.repeat(() -> {
-                if (yamlPlayerDataStorage != null && rankManager != null
-                        && rankManager.getCacheManager() != null) {
-                    var snapshot = rankManager.getCacheManager().snapshotOnlineAndUnexpired();
-                    if (!snapshot.isEmpty()) yamlPlayerDataStorage.saveAll(snapshot);
-                }
-            }, yamlSyncInterval, yamlSyncInterval);
-        }
+        // Always maintain local YAML mirrors as an active standby
+        long yamlSyncInterval = getConfig() != null
+                ? getConfig().getLong("sync.interval-ticks", 200L) : 200L;
+
+        taskScheduler.repeat(() -> {
+            if (yamlPlayerDataStorage != null && rankManager != null
+                    && rankManager.getCacheManager() != null) {
+                var snapshot = rankManager.getCacheManager().snapshotOnlineAndUnexpired();
+                if (!snapshot.isEmpty()) yamlPlayerDataStorage.saveAll(snapshot);
+            }
+        }, yamlSyncInterval, yamlSyncInterval);
     }
 
     // ── Hot-reload ────────────────────────────────────────────────────────────

@@ -4,28 +4,37 @@ import com.joshuaop.rankforge.RankForge;
 
 import java.sql.*;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 /**
  * Handles all player-data reads and writes.
  *
- * <p>A failed SQL read is not a "new player" read.  It enters YAML mode and
- * returns the last valid YAML/cache record instead.  Writes are serialized per
- * UUID and always prefer the newest cache snapshot, which prevents an older
+ * <p>A failed SQL read is not a "new player" read. It enters YAML mode and
+ * returns the last valid YAML/cache record instead. Writes are serialized per
+ * UUID (via striped locks) and always prefer the newest cache snapshot, which prevents an older
  * asynchronous flush from replacing a newer rank change.</p>
  */
 public class RankDataRepository {
 
+    private static final int LOCK_COUNT = 128;
+    private final Object[] lockStripes = new Object[LOCK_COUNT];
+
     private final RankForge plugin;
     private final DatabaseManager db;
     private final CacheManager cache;
-    private final ConcurrentHashMap<UUID, Object> playerLocks = new ConcurrentHashMap<>();
 
     public RankDataRepository(RankForge plugin, CacheManager cache) {
         this.plugin = plugin;
         this.db = plugin.getDatabaseManager();
         this.cache = cache;
+
+        for (int i = 0; i < LOCK_COUNT; i++) {
+            lockStripes[i] = new Object();
+        }
+    }
+
+    private Object getLock(UUID uuid) {
+        return lockStripes[Math.abs(uuid.hashCode() % LOCK_COUNT)];
     }
 
     public PlayerData load(UUID uuid, String playerName) {
@@ -46,7 +55,7 @@ public class RankDataRepository {
                 cache.put(uuid, created);
                 return created;
             } catch (Exception e) {
-                plugin.getLogger().log(Level.WARNING,
+                db.logMySQLOperationFailure(
                         "MySQL load failed for " + uuid
                                 + "; preserving existing YAML/cache data.", e);
                 db.markUnavailable(e);
@@ -110,14 +119,15 @@ public class RankDataRepository {
         }
 
         UUID uuid = requested.uuid();
-        synchronized (playerLocks.computeIfAbsent(uuid, ignored -> new Object())) {
+        synchronized (getLock(uuid)) {
             // A delayed task may carry an old snapshot. The cache is the newest
             // in-memory source of truth for an active player.
             PlayerData current = cache.getRaw(uuid);
             PlayerData data = current != null && current.isValidFor(uuid) ? current : requested;
             if (!data.isValidFor(uuid)) return false;
 
-            if (db.isConnected()) {
+            // Checked against isReadyForReads() so normal saves do not execute against MySQL during recovery
+            if (db.isReadyForReads()) {
                 if (saveToMySQL(data)) return true;
                 db.markUnavailable(new SQLException("MySQL player save was not confirmed."));
             }
@@ -142,7 +152,7 @@ public class RankDataRepository {
      * <p>This intentionally uses {@link DatabaseManager#isConnected()}, not
      * {@link DatabaseManager#isReadyForReads()}: the pool is marked as recovering
      * while these writes are being restored, and reads must remain on YAML until
-     * recovery has completed.  Unlike a normal save, this method never falls back
+     * recovery has completed. Unlike a normal save, this method never falls back
      * to YAML or performs another backend write.</p>
      */
     public boolean saveForRecovery(PlayerData requested) {
@@ -150,7 +160,7 @@ public class RankDataRepository {
                 || !db.isConnected()) return false;
 
         UUID uuid = requested.uuid();
-        synchronized (playerLocks.computeIfAbsent(uuid, ignored -> new Object())) {
+        synchronized (getLock(uuid)) {
             PlayerData current = cache.getRaw(uuid);
             PlayerData data = current != null && current.isValidFor(uuid)
                     ? current : requested;
@@ -187,7 +197,7 @@ public class RankDataRepository {
             int updated = ps.executeUpdate();
             return updated >= 1;
         } catch (SQLException e) {
-            plugin.getLogger().log(Level.WARNING,
+            db.logMySQLOperationFailure(
                     "MySQL save failed for " + data.uuid() + ".", e);
             return false;
         }
@@ -203,28 +213,52 @@ public class RankDataRepository {
     }
 
     public List<PlayerData> getTopPlayers(int limit) {
-        List<PlayerData> result = new ArrayList<>();
-        if (!db.isConnected()) {
-            YamlPlayerDataStorage yaml = plugin.getYamlPlayerDataStorage();
-            return yaml != null ? yaml.loadAll().stream().limit(limit).toList() : result;
+        if (db.isReadyForReads()) {
+            String sql = "SELECT * FROM rf_players ORDER BY experience DESC LIMIT ?";
+            try (Connection conn = db.getConnection();
+                 PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, limit);
+                try (ResultSet rs = ps.executeQuery()) {
+                    List<PlayerData> result = new ArrayList<>();
+                    while (rs.next()) {
+                        PlayerData data = fromResultSet(rs);
+                        if (data.isValidFor(data.uuid())) result.add(data);
+                    }
+                    return result;
+                }
+            } catch (Exception e) {
+                db.logMySQLOperationFailure("getTopPlayers failed; using YAML/Cache.", e);
+                db.markUnavailable(e);
+            }
         }
-        String sql = "SELECT * FROM rf_players ORDER BY experience DESC LIMIT ?";
-        try (Connection conn = db.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setInt(1, limit);
-            try (ResultSet rs = ps.executeQuery()) {
-                while (rs.next()) {
-                    PlayerData data = fromResultSet(rs);
-                    if (data.isValidFor(data.uuid())) result.add(data);
+
+        return getTopPlayersFromCacheAndYaml(limit);
+    }
+
+    private List<PlayerData> getTopPlayersFromCacheAndYaml(int limit) {
+        Map<UUID, PlayerData> merged = new HashMap<>();
+
+        // 1. Load persisted records from YAML
+        YamlPlayerDataStorage yaml = plugin.getYamlPlayerDataStorage();
+        if (yaml != null) {
+            for (PlayerData p : yaml.loadAll()) {
+                if (p != null && p.isValidFor(p.uuid())) {
+                    merged.put(p.uuid(), p);
                 }
             }
-        } catch (Exception e) {
-            plugin.getLogger().log(Level.WARNING, "getTopPlayers failed; using YAML.", e);
-            db.markUnavailable(e);
-            YamlPlayerDataStorage yaml = plugin.getYamlPlayerDataStorage();
-            if (yaml != null) return yaml.loadAll().stream().limit(limit).toList();
         }
-        return result;
+
+        // 2. Overlay live cache data which contains newest active player XP
+        for (PlayerData cached : cache.all()) {
+            if (cached != null && cached.isValidFor(cached.uuid())) {
+                merged.put(cached.uuid(), cached);
+            }
+        }
+
+        return merged.values().stream()
+                .sorted((a, b) -> Long.compare(b.experience(), a.experience()))
+                .limit(limit)
+                .toList();
     }
 
     private PlayerData makeDefault(UUID uuid, String playerName, boolean cacheIt) {

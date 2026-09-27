@@ -6,6 +6,7 @@ import org.bukkit.entity.Player;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 
 /**
@@ -22,23 +23,36 @@ public class CacheManager {
 
     private final RankForge                      plugin;
     private final ConcurrentHashMap<UUID, Entry> cache = new ConcurrentHashMap<>();
-
-    private static final long TTL_MS = 10 * 60 * 1000L;
+    private volatile long                        ttlMs;
 
     public CacheManager(RankForge plugin) {
         this.plugin = plugin;
+        reloadTtl();
+    }
+
+    /**
+     * Reads and recalculates cache TTL configuration setting in milliseconds.
+     * Enforces a 1-minute minimum to prevent accidental zero-TTL eviction loops.
+     */
+    public void reloadTtl() {
+        long ttlMinutes = plugin.getConfig().getLong("cache.ttl-minutes", 10L);
+        this.ttlMs = TimeUnit.MINUTES.toMillis(Math.max(1L, ttlMinutes));
+    }
+
+    public long getTtlMs() {
+        return ttlMs;
     }
 
     // ── Write ─────────────────────────────────────────────────────────────────
 
     public void put(UUID id, PlayerData data) {
         if (id == null || data == null || !data.isValidFor(id)) return;
-        cache.put(id, new Entry(data, System.currentTimeMillis() + TTL_MS, true));
+        cache.put(id, new Entry(data, System.currentTimeMillis() + ttlMs, true));
     }
 
     /**
      * Replaces a record only if the cache still contains the exact state that was
-     * read by the caller.  This is used by offline mutations so a login, save, or
+     * read by the caller. This is used by offline mutations so a login, save, or
      * another update cannot be overwritten by an older asynchronous snapshot.
      */
     public boolean compareAndSet(UUID id, PlayerData expected, PlayerData replacement) {
@@ -46,13 +60,13 @@ public class CacheManager {
                 || !replacement.isValidFor(id)) return false;
         Entry current = cache.get(id);
         if (current == null || !current.data().equals(expected)) return false;
-        Entry updated = new Entry(replacement, System.currentTimeMillis() + TTL_MS,
+        Entry updated = new Entry(replacement, System.currentTimeMillis() + ttlMs,
                 current.activeOnline());
         return cache.replace(id, current, updated);
     }
 
     public void putAll(Map<UUID, PlayerData> map) {
-        long exp = System.currentTimeMillis() + TTL_MS;
+        long exp = System.currentTimeMillis() + ttlMs;
         map.forEach((k, v) -> {
             if (k != null && v != null && v.isValidFor(k)) {
                 cache.put(k, new Entry(v, exp, true));
@@ -110,7 +124,7 @@ public class CacheManager {
         }
 
         if (e.activeOnline())
-            cache.put(id, new Entry(e.data(), now + TTL_MS, true));
+            cache.put(id, new Entry(e.data(), now + ttlMs, true));
 
         // Live Bukkit/Vault/tracker access is only legal on the server thread.
         return Bukkit.isPrimaryThread() ? stitchLiveData(e.data(), true) : e.data();

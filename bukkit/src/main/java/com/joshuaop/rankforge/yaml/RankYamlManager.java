@@ -6,11 +6,16 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
@@ -34,6 +39,7 @@ public class RankYamlManager {
     private final File           ranksFile;
     private final YamlLoader     loader;
     private final YamlSerializer serializer;
+    private final Object         lock = new Object();
 
     /** Monotone counter — only the task whose id matches the current value writes. */
     private final AtomicInteger saveGeneration = new AtomicInteger(0);
@@ -57,15 +63,22 @@ public class RankYamlManager {
     }
 
     public void load() {
-        // Cache the raw YamlConfiguration context to read 'default-rank' properties later
-        this.config = YamlConfiguration.loadConfiguration(ranksFile);
-        this.ranks  = loader.loadFrom(ranksFile);
+        YamlConfiguration loadedConfig = loadUtf8Yaml(ranksFile);
+        LinkedHashMap<String, RankModel> loadedRanks = loader.loadFrom(ranksFile);
+
+        synchronized (lock) {
+            this.config = loadedConfig;
+            this.ranks = loadedRanks;
+        }
     }
 
     public void hotReload() {
         load();
-        if (plugin.isDebug())
-            log.info("[RankYaml] Hot-reload complete — " + ranks.size() + " ranks loaded.");
+        if (plugin.isDebug()) {
+            synchronized (lock) {
+                log.info("[RankYaml] Hot-reload complete — " + ranks.size() + " ranks loaded.");
+            }
+        }
     }
 
     /**
@@ -77,10 +90,14 @@ public class RankYamlManager {
      */
     public void saveAsync(Runnable onComplete) {
         int gen = saveGeneration.incrementAndGet();
-        Collection<RankModel> snapshot = new ArrayList<>(ranks.values());
         
-        // Keep a copy of the current in-memory default rank ID to protect it from erasure
-        String currentDefaultRank = config.getString("default-rank", "Guest");
+        List<RankModel> snapshot;
+        String currentDefaultRank;
+        
+        synchronized (lock) {
+            snapshot = new ArrayList<>(ranks.values());
+            currentDefaultRank = config.getString("default-rank", "Guest");
+        }
 
         new BukkitRunnable() {
             @Override
@@ -88,13 +105,13 @@ public class RankYamlManager {
                 if (saveGeneration.get() != gen) return;
 
                 YamlConfiguration cfg = serializer.serialize(snapshot);
-                // Retain root configurations within the new configuration wrapper profile
                 cfg.set("default-rank", currentDefaultRank);
                 
                 try {
                     cfg.save(ranksFile);
-                    // Sync internal config reference context state post-save
-                    config = cfg;
+                    synchronized (lock) {
+                        config = cfg;
+                    }
                     if (plugin.isDebug())
                         log.info("[RankYaml] Auto-saved " + snapshot.size() + " ranks.");
                 } catch (IOException e) {
@@ -113,14 +130,23 @@ public class RankYamlManager {
      */
     public void saveSync() {
         saveGeneration.incrementAndGet();
-        YamlConfiguration cfg = serializer.serialize(ranks.values());
         
-        // Retain root configurations within the new configuration wrapper profile
-        cfg.set("default-rank", config.getString("default-rank", "Guest"));
+        List<RankModel> snapshot;
+        String currentDefaultRank;
+
+        synchronized (lock) {
+            snapshot = new ArrayList<>(ranks.values());
+            currentDefaultRank = config.getString("default-rank", "Guest");
+        }
+
+        YamlConfiguration cfg = serializer.serialize(snapshot);
+        cfg.set("default-rank", currentDefaultRank);
         
         try {
             cfg.save(ranksFile);
-            config = cfg;
+            synchronized (lock) {
+                config = cfg;
+            }
         } catch (IOException e) {
             log.severe("[RankYaml] Failed to save ranks.yml on shutdown: " + e.getMessage());
         }
@@ -133,7 +159,9 @@ public class RankYamlManager {
      * @param persist true → trigger a debounced async save immediately
      */
     public void updateRank(RankModel model, boolean persist) {
-        ranks.put(model.getId(), model);
+        synchronized (lock) {
+            ranks.put(model.getId(), model);
+        }
         if (persist) saveAsync(null);
     }
 
@@ -141,15 +169,54 @@ public class RankYamlManager {
      * Remove a rank from memory and auto-save.
      */
     public void deleteRank(String rankId) {
-        ranks.remove(rankId);
+        synchronized (lock) {
+            ranks.remove(rankId);
+        }
         saveAsync(null);
     }
 
-    public LinkedHashMap<String, RankModel> getRanks()  { return ranks; }
-    public RankModel getRank(String id)                  { return ranks.get(id); }
-    public boolean   rankExists(String id)               { return ranks.containsKey(id); }
-    public File      getRanksFile()                      { return ranksFile; }
+    /**
+     * Returns a thread-safe defensive copy of the ranks map to prevent 
+     * external callers from mutating internal state without synchronization.
+     */
+    public LinkedHashMap<String, RankModel> getRanks() {
+        synchronized (lock) {
+            return new LinkedHashMap<>(ranks);
+        }
+    }
+
+    public RankModel getRank(String id) {
+        synchronized (lock) {
+            return ranks.get(id);
+        }
+    }
+
+    public boolean rankExists(String id) {
+        synchronized (lock) {
+            return ranks.containsKey(id);
+        }
+    }
+
+    public File getRanksFile() {
+        return ranksFile;
+    }
     
     /** Exposes the active YamlConfiguration instance context for direct queries. */
-    public YamlConfiguration getConfig()                { return config; }
+    public YamlConfiguration getConfig() {
+        synchronized (lock) {
+            return config;
+        }
+    }
+
+    private YamlConfiguration loadUtf8Yaml(File file) {
+        YamlConfiguration yamlConfig = new YamlConfiguration();
+        if (!file.exists()) return yamlConfig;
+        
+        try (InputStreamReader reader = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)) {
+            yamlConfig.load(reader);
+        } catch (Exception e) {
+            log.log(Level.SEVERE, "[RankYaml] Failed to load configuration file using UTF-8: " + file.getName(), e);
+        }
+        return yamlConfig;
+    }
 }

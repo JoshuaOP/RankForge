@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Checks the official SpigotMC resource for newer RankForge versions.
@@ -32,9 +33,12 @@ public class UpdateChecker implements Listener {
     private final RankForge plugin;
     private final String    currentVersion;
     private final Logger    log;
+    private final Object    versionLogLock = new Object();
+    private final AtomicBoolean startupCheckStarted = new AtomicBoolean(false);
 
     private volatile String  latestVersion  = null;
     private volatile boolean updateAvailable = false;
+    private String           lastLoggedStatus;
 
     public UpdateChecker(RankForge plugin) {
         this.plugin         = plugin;
@@ -44,6 +48,7 @@ public class UpdateChecker implements Listener {
 
     public void checkOnStartup() {
         if (!plugin.getConfig().getBoolean("plugin-version-notifier.enabled", true)) return;
+        if (!startupCheckStarted.compareAndSet(false, true)) return;
 
         fetchAsync();
 
@@ -56,22 +61,37 @@ public class UpdateChecker implements Listener {
         plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
             String fetched = fetchFromSpigot();
             if (fetched == null) {
-                log.info("Could not reach SpigotMC — skipping version check.");
+                logVersionStatus("unreachable", () ->
+                        log.info("Could not reach SpigotMC — skipping version check."));
                 return;
             }
 
             latestVersion = fetched;
 
-            if (isNewer(fetched, currentVersion)) {
+            boolean newer = isNewer(fetched, currentVersion);
+            if (newer) {
                 updateAvailable = true;
-                log.warning("A new version of RankForge is available!");
-                log.warning("Current Version: v" + currentVersion);
-                log.warning("Latest Version: v" + fetched);
-                log.warning("Download: " + SPIGOT_PAGE_URL);
+                logVersionStatus("update:" + fetched, () -> {
+                    log.warning("A new version of RankForge is available!");
+                    log.warning("Current Version: v" + currentVersion);
+                    log.warning("Latest Version: v" + fetched);
+                    log.warning("Download: " + SPIGOT_PAGE_URL);
+                });
             } else {
-                log.info("You are running the latest version of RankForge (v" + currentVersion + ").");
+                updateAvailable = false;
+                logVersionStatus("latest:" + currentVersion, () ->
+                        log.info("You are running the latest version of RankForge (v"
+                                + currentVersion + ")."));
             }
         });
+    }
+
+    private void logVersionStatus(String status, Runnable logAction) {
+        synchronized (versionLogLock) {
+            if (status.equals(lastLoggedStatus)) return;
+            lastLoggedStatus = status;
+            logAction.run();
+        }
     }
 
     private String fetchFromSpigot() {
