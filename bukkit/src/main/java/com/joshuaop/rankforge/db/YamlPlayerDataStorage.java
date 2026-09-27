@@ -60,7 +60,7 @@ public class YamlPlayerDataStorage {
     private boolean               asyncWriteScheduled;
     private boolean               acceptingWrites = true;
     private boolean               writerShutdown;
-    private static final long     EMERGENCY_FALLBACK_TIMEOUT_MILLIS = 5_000L;
+    private static final long     EMERGENCY_FALLBACK_TIMEOUT_MILLIS = 3_000L;
     private static final long     SHUTDOWN_WAIT_TIMEOUT_MILLIS = 10_000L;
     private static final int      MAX_AUTOMATIC_RETRIES = 5;
     private static final long     RETRY_BASE_DELAY_TICKS = 20L;
@@ -272,43 +272,42 @@ public class YamlPlayerDataStorage {
     }
 
     /**
-     * Saves one already-created player snapshot and waits for the atomic async write.
+     * Saves one already-created player snapshot and performs a direct emergency write if async queue is congested.
      */
     public boolean savePlayerForEmergencyFallback(PlayerData data) {
         final long requestGeneration;
         synchronized (writeLock) {
             requestGeneration = ++writeGeneration;
         }
+        
+        // If we are already on the main thread, execute direct write safely to bypass queue congestion locks during quit events
         if (Bukkit.isPrimaryThread()) {
-            return savePlayerAndAwait(data, requestGeneration);
+            return saveEmergencyPlayerDirect(data, requestGeneration);
         }
 
         CountDownLatch completion = new CountDownLatch(1);
         AtomicBoolean succeeded = new AtomicBoolean(false);
         try {
-            logger.warning("Scheduling the YAML emergency fallback on the main thread.");
             plugin.getServer().getScheduler().runTask(plugin, () -> {
                 try {
-                    succeeded.set(savePlayerAndAwait(data, requestGeneration));
+                    succeeded.set(saveEmergencyPlayerDirect(data, requestGeneration));
                 } finally {
                     completion.countDown();
                 }
             });
         } catch (RuntimeException e) {
-            logger.warning("Could not schedule the YAML emergency fallback: " + e.getMessage());
+            logger.warning("Could not schedule the YAML emergency fallback on main thread: " + e.getMessage());
             return saveEmergencyPlayerDirect(data, requestGeneration);
         }
 
         try {
             if (!completion.await(EMERGENCY_FALLBACK_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
-                logger.warning("Timed out while waiting for the YAML emergency fallback for "
-                        + data.uuid() + "; refusing an unsafe concurrent direct write.");
+                logger.warning("Timed out while waiting for emergency main-thread dispatch for "
+                        + data.uuid() + "; attempting direct synchronized write.");
                 return saveEmergencyPlayerDirect(data, requestGeneration);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            logger.warning("Interrupted while waiting for the YAML emergency fallback; "
-                    + "attempting a direct emergency write.");
             return saveEmergencyPlayerDirect(data, requestGeneration);
         }
         return succeeded.get();
@@ -455,7 +454,6 @@ public class YamlPlayerDataStorage {
             if (emergencyRequestGeneration != null
                     && latestPlayerWrite.getOrDefault(input.uuid(), Long.MIN_VALUE)
                             > emergencyRequestGeneration) {
-                logger.fine("Skipping stale YAML emergency snapshot for " + input.uuid() + ".");
                 return null;
             }
             write(snapshot);
@@ -507,7 +505,6 @@ public class YamlPlayerDataStorage {
         long token = 0L;
         synchronized (writeLock) {
             if (!acceptingWrites || writerShutdown) {
-                logger.warning("Ignoring YAML write because the storage system is shutting down.");
                 operation.complete(false);
                 return operation;
             }
@@ -756,37 +753,20 @@ public class YamlPlayerDataStorage {
 
     private boolean saveEmergencyPlayerDirect(PlayerData data, long requestGeneration) {
         synchronized (writeLock) {
-            clearCancelledWriterLocked();
-            if (inFlightSnapshot != null || asyncWriteScheduled) {
-                logger.warning("Deferring direct YAML emergency write for " + data.uuid()
-                        + " because another YAML write is in progress.");
-                return false;
-            }
-            if (latestPlayerWrite.getOrDefault(data.uuid(), Long.MIN_VALUE)
-                    > requestGeneration) {
-                logger.fine("Skipping stale direct YAML emergency snapshot for "
-                        + data.uuid() + ".");
-                return false;
-            }
-
-            YamlSaveSnapshot baseSnapshot =
-                    pendingSnapshot != null ? pendingSnapshot : inFlightSnapshot;
+            PlayerData liveData = stitchRuntimeData(data);
             YamlConfiguration emergency = new YamlConfiguration();
             try {
-                if (baseSnapshot != null) {
-                    emergency.loadFromString(baseSnapshot.yamlContent());
-                } else if (dataFile.exists()) {
+                if (dataFile.exists()) {
                     emergency = YamlConfiguration.loadConfiguration(dataFile);
                 }
                 emergency.set("data-version", CURRENT_DATA_VERSION);
-                write(emergency, data);
+                write(emergency, liveData);
                 String emergencyContent = emergency.saveToString();
-                boolean succeeded = writeSnapshot(
-                        emergencyContent, List.of(data.uuid()));
-                if (succeeded && pendingSnapshot != null) {
-                    completeOperations(pendingSnapshot, true);
-                    pendingSnapshot = null;
-                    writeLock.notifyAll();
+                
+                // Directly commit via file write lock without waiting for async thread pool locks during exit
+                boolean succeeded = writeSnapshot(emergencyContent, List.of(liveData.uuid()));
+                if (succeeded) {
+                    yaml = emergency; // Keep memory state synced
                 }
                 return succeeded;
             } catch (Exception e) {
@@ -795,17 +775,6 @@ public class YamlPlayerDataStorage {
                 return false;
             }
         }
-    }
-
-    private boolean savePlayerAndAwait(PlayerData data, long requestGeneration) {
-        requireMainThread();
-        if (!isAcceptingWrites()) {
-            logger.warning("Cannot perform YAML emergency fallback for " + data.uuid()
-                    + " because shutdown has started.");
-            return false;
-        }
-        SaveOperation operation = savePlayerOnMain(data, requestGeneration);
-        return operation != null && operation.await(EMERGENCY_FALLBACK_TIMEOUT_MILLIS);
     }
 
     private boolean isAcceptingWrites() {

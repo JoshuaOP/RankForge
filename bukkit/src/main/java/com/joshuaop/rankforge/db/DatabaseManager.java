@@ -60,7 +60,7 @@ public class DatabaseManager {
         long   timeout  = cfg.getLong("database.timeout",    5000);
 
         String jdbcUrl = "jdbc:mysql://" + host + ":" + port + "/" + dbName
-                + "?useSSL=false&allowPublicKeyRetrieval=true&autoReconnect=true&characterEncoding=utf8&serverTimezone=UTC";
+                + "?useSSL=false&allowPublicKeyRetrieval=true&autoReconnect=false&characterEncoding=utf8&serverTimezone=UTC";
 
         synchronized (connectionLock) {
             if (isConnected()) return true;
@@ -74,19 +74,23 @@ public class DatabaseManager {
                 try {
                     Class.forName(driverClass);
                 } catch (ClassNotFoundException ignored) {
-                    driverClass = null; // Rely on standard JDBC auto-discovery
+                    driverClass = null;
                 }
             }
 
-            // 1. Pre-flight JDBC connection probe to avoid spinning up Hikari pools when database is unreachable
+            // 1. Pre-flight JDBC connection probe with login timeout configuration
             Properties props = new Properties();
             props.setProperty("user", user);
             props.setProperty("password", password);
             props.setProperty("connectTimeout", String.valueOf(timeout));
+            props.setProperty("socketTimeout", String.valueOf(timeout));
 
-            try (Connection testConn = DriverManager.getConnection(jdbcUrl, props)) {
-                if (!testConn.isValid((int) Math.max(1L, timeout / 1000L))) {
-                    throw new SQLException("Pre-flight MySQL connection test validation failed.");
+            try {
+                DriverManager.setLoginTimeout((int) Math.max(1L, timeout / 1000L));
+                try (Connection testConn = DriverManager.getConnection(jdbcUrl, props)) {
+                    if (!testConn.isValid(3)) {
+                        throw new SQLException("Pre-flight MySQL connection validation failed.");
+                    }
                 }
             } catch (Exception e) {
                 available = false;
@@ -100,7 +104,7 @@ public class DatabaseManager {
                 return false;
             }
 
-            // 2. Pre-flight succeeded; safely initialize HikariCP pool
+            // 2. Pre-flight succeeded; safely initialize HikariCP pool with robust health-check parameters
             try {
                 closeDataSource();
 
@@ -113,8 +117,12 @@ public class DatabaseManager {
                 config.setPassword(password);
                 config.setMaximumPoolSize(poolSize);
                 config.setConnectionTimeout(timeout);
-                config.setInitializationFailTimeout(-1);
+                config.setValidationTimeout(3000L);
+                config.setIdleTimeout(600000L); // 10 minutes
+                config.setMaxLifetime(1800000L); // 30 minutes
+                config.setInitializationFailTimeout(1); // Fail fast instead of blocking startup thread
                 config.setPoolName("RankForge-MySQL");
+                
                 config.addDataSourceProperty("cachePrepStmts",        "true");
                 config.addDataSourceProperty("prepStmtCacheSize",     "250");
                 config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
@@ -122,7 +130,7 @@ public class DatabaseManager {
                 dataSource = new HikariDataSource(config);
                 available  = true;
 
-                // Initialize database tables/schema
+                // Initialize database tables/schema safely
                 new MySQLProvider(this).createTables();
 
                 fallbackMessageLogged = false;
@@ -177,10 +185,6 @@ public class DatabaseManager {
         }
     }
 
-    /**
-     * Checks if MySQL is connected AND not currently undergoing data recovery.
-     * Lock-free check to prevent blocking read ops.
-     */
     public boolean isReadyForReads() {
         return isConnected() && !recovering;
     }
@@ -234,9 +238,6 @@ public class DatabaseManager {
         }
     }
 
-    /**
-     * Lock-free connection retrieval directly from HikariCP pool.
-     */
     public Connection getConnection() throws SQLException {
         if (!available) {
             throw new SQLException("MySQL DataSource is marked unavailable.");
@@ -248,9 +249,6 @@ public class DatabaseManager {
         return ds.getConnection();
     }
 
-    /**
-     * Lock-free status check.
-     */
     public boolean isConnected() {
         HikariDataSource ds = this.dataSource;
         return available && ds != null && !ds.isClosed();

@@ -66,6 +66,7 @@ public class CacheManager {
     }
 
     public void putAll(Map<UUID, PlayerData> map) {
+        if (map == null || map.isEmpty()) return;
         long exp = System.currentTimeMillis() + ttlMs;
         map.forEach((k, v) -> {
             if (k != null && v != null && v.isValidFor(k)) {
@@ -78,9 +79,7 @@ public class CacheManager {
 
     /** Drop TTL to 1-minute grace period after logout. */
     public void scheduleCleanup(UUID id) {
-        Entry e = cache.get(id);
-        if (e != null)
-            cache.put(id, new Entry(e.data(), System.currentTimeMillis() + 60_000L, false));
+        cache.computeIfPresent(id, (uuid, e) -> new Entry(e.data(), System.currentTimeMillis() + 60_000L, false));
     }
 
     /** Remove expired offline entries; never evicts active online players. */
@@ -95,14 +94,14 @@ public class CacheManager {
      * Call this after a ranks.yml reload to fix orphaned rank references.
      */
     public void repairOrphanedRankIds(Predicate<String> isValidRankId, String fallbackRankId) {
-        for (Map.Entry<UUID, Entry> entry : cache.entrySet()) {
-            PlayerData data = entry.getValue().data();
+        if (isValidRankId == null || fallbackRankId == null) return;
+        cache.replaceAll((uuid, old) -> {
+            PlayerData data = old.data();
             if (!isValidRankId.test(data.rankId())) {
-                Entry old = entry.getValue();
-                cache.put(entry.getKey(),
-                        new Entry(data.withRank(fallbackRankId), old.expiresAt(), old.activeOnline()));
+                return new Entry(data.withRank(fallbackRankId), old.expiresAt(), old.activeOnline());
             }
-        }
+            return old;
+        });
     }
 
     public void clear() { cache.clear(); }
@@ -114,6 +113,7 @@ public class CacheManager {
      * stitched in for online players.
      */
     public PlayerData get(UUID id) {
+        if (id == null) return null;
         Entry e = cache.get(id);
         if (e == null) return null;
 
@@ -123,8 +123,9 @@ public class CacheManager {
             return null;
         }
 
-        if (e.activeOnline())
-            cache.put(id, new Entry(e.data(), now + ttlMs, true));
+        if (e.activeOnline()) {
+            cache.computeIfPresent(id, (uuid, current) -> new Entry(current.data(), now + ttlMs, true));
+        }
 
         // Live Bukkit/Vault/tracker access is only legal on the server thread.
         return Bukkit.isPrimaryThread() ? stitchLiveData(e.data(), true) : e.data();
@@ -132,11 +133,13 @@ public class CacheManager {
 
     /** Raw retrieval without stitching — avoids recursion in internal save paths. */
     public PlayerData getRaw(UUID id) {
+        if (id == null) return null;
         Entry e = cache.get(id);
         return e != null ? e.data() : null;
     }
 
     public boolean contains(UUID id) {
+        if (id == null) return false;
         Entry e = cache.get(id);
         if (e == null) return false;
         long now = System.currentTimeMillis();
@@ -178,30 +181,22 @@ public class CacheManager {
         }
         long now = System.currentTimeMillis();
         List<PlayerData> snapshots = new ArrayList<>();
-        for (Map.Entry<UUID, Entry> entry : cache.entrySet()) {
-            Entry current = entry.getValue();
-            if (!current.activeOnline() && current.expiresAt() < now) continue;
-            PlayerData snapshot = stitchLiveData(current.data(), current.activeOnline());
-            put(entry.getKey(), snapshot);
-            snapshots.add(snapshot);
-        }
+        
+        cache.forEach((uuid, current) -> {
+            if (current.activeOnline() || current.expiresAt() >= now) {
+                PlayerData snapshot = stitchLiveData(current.data(), current.activeOnline());
+                put(uuid, snapshot);
+                snapshots.add(snapshot);
+            }
+        });
+        
         return List.copyOf(snapshots);
     }
 
     // ── Live Data Stitching ───────────────────────────────────────────────────
 
-    /**
-     * Appends live XP, Vault balance, block-break count, and real-world playtime
-     * for online players so cached records never return stale values during an active session.
-     *
-     * <p>Block breaks — sourced from {@link com.joshuaop.rankforge.tracker.BlockBreakTracker}
-     * (exact {@link java.util.concurrent.atomic.AtomicLong} counter).
-     *
-     * <p>Playtime — sourced from {@link com.joshuaop.rankforge.tracker.PlaytimeTracker}
-     * (wall-clock elapsed minutes; independent of server TPS).
-     */
     private PlayerData stitchLiveData(PlayerData data, boolean isActiveOnline) {
-        if (!isActiveOnline) return data;
+        if (!isActiveOnline || data == null) return data;
 
         Player player = Bukkit.getPlayer(data.uuid());
         if (player == null || !player.isOnline()) return data;

@@ -144,6 +144,10 @@ public class SyncService {
             CompletableFuture<Collection<PlayerData>> cacheFuture = new CompletableFuture<>();
             plugin.getServer().getScheduler().runTask(plugin, () -> {
                 try {
+                    if (!plugin.isEnabled()) {
+                        cacheFuture.complete(Collections.emptyList());
+                        return;
+                    }
                     if (plugin.getBlockBreakTracker() != null) {
                         plugin.getBlockBreakTracker().flushAll();
                     }
