@@ -5,6 +5,7 @@ import org.bukkit.entity.Player;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedDeque;
 
 /**
  * Multi-layer exploit detection system.
@@ -24,7 +25,7 @@ public class AntiAbuseManager {
     private final RankForge   plugin;
     private final RateLimiter commandRateLimiter;
 
-    /** Recent click timestamps per player (for macro detection). */
+    /** Recent click timestamps per player (for macro detection). Thread-safe deque. */
     private final Map<UUID, Deque<Long>> clickHistory = new ConcurrentHashMap<>();
 
     /** Log of admin rank changes for rollback confirmation. */
@@ -42,8 +43,10 @@ public class AntiAbuseManager {
      * @return true if the click is allowed, false if macro-like.
      */
     public boolean recordClick(UUID playerId) {
+        if (playerId == null) return true;
+        
         long now = System.currentTimeMillis();
-        Deque<Long> history = clickHistory.computeIfAbsent(playerId, k -> new ArrayDeque<>());
+        Deque<Long> history = clickHistory.computeIfAbsent(playerId, k -> new ConcurrentLinkedDeque<>());
 
         if (!history.isEmpty() && (now - history.peekLast()) < MACRO_THRESHOLD_MS) {
             warn(playerId, "Macro-like click detected (interval < " + MACRO_THRESHOLD_MS + "ms)");
@@ -51,7 +54,9 @@ public class AntiAbuseManager {
         }
 
         history.addLast(now);
-        if (history.size() > CLICK_HISTORY_SIZE) history.pollFirst();
+        if (history.size() > CLICK_HISTORY_SIZE) {
+            history.pollFirst();
+        }
         return true;
     }
 
@@ -61,6 +66,7 @@ public class AntiAbuseManager {
      * Check if a command action is allowed for this player.
      */
     public boolean allowCommand(UUID playerId) {
+        if (playerId == null) return false;
         return commandRateLimiter.tryAcquire(playerId);
     }
 
@@ -70,16 +76,19 @@ public class AntiAbuseManager {
      * Record an admin action that can be rolled back.
      */
     public void recordAdminAction(UUID adminId, String targetName, String oldRank, String newRank) {
+        if (adminId == null) return;
         pendingRollbacks.put(adminId, new AdminAction(adminId, targetName, oldRank, newRank));
     }
 
     public AdminAction getPendingRollback(UUID adminId) {
+        if (adminId == null) return null;
         return pendingRollbacks.remove(adminId);
     }
 
     // ── Cleanup ───────────────────────────────────────────────────────────────
 
     public void cleanup(UUID playerId) {
+        if (playerId == null) return;
         clickHistory.remove(playerId);
         commandRateLimiter.remove(playerId);
     }
@@ -91,12 +100,13 @@ public class AntiAbuseManager {
     public int getTrackedPlayers() { return clickHistory.size(); }
 
     private void warn(UUID playerId, String reason) {
+        if (playerId == null) return;
         Player p = plugin.getServer().getPlayer(playerId);
         String name = p != null ? p.getName() : playerId.toString();
         plugin.getLogger().warning("Anti-abuse: " + name + " — " + reason);
     }
 
-    // ── Inner record ──────────────────────────────────────────────────────────
+    // ── Inner record ────────────────────────────────__________________________
 
     public record AdminAction(UUID adminId, String targetName, String oldRank, String newRank) {}
 }

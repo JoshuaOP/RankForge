@@ -6,12 +6,15 @@ import com.joshuaop.rankforge.rank.RankModel;
 import com.joshuaop.rankforge.util.FormatUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Admin overview GUI — lists all loaded ranks and provides editor controls.
@@ -24,23 +27,28 @@ import java.util.*;
  */
 public class AdminRankEditorGUI {
 
-    public static final String TITLE = "§8✦ §cAdmin Rank Editor §8✦";
-    private static final Set<UUID> OPEN_VIEWERS = new HashSet<>();
+    private static final Set<UUID> OPEN_VIEWERS = ConcurrentHashMap.newKeySet();
+    private final NamespacedKey rankIdKey;
 
     private final RankForge plugin;
 
     public AdminRankEditorGUI(RankForge plugin) {
         this.plugin = plugin;
+        this.rankIdKey = new NamespacedKey(plugin, "rank_id");
     }
 
     public void open(Player player) {
-        Inventory inv = Bukkit.createInventory(null, 54, plugin.getGuiConfig().adminTitle());
+        if (player == null) return;
+        String title = plugin.getGuiConfig() != null ? plugin.getGuiConfig().adminTitle() : "§8✦ §cAdmin Rank Editor §8✦";
+        Inventory inv = Bukkit.createInventory(null, 54, title);
 
         buildBorder(inv);
         buildRankList(inv);
         buildControls(inv);
 
-        plugin.getSoundManager().playOpen(player);
+        if (plugin.getSoundManager() != null) {
+            plugin.getSoundManager().playOpen(player);
+        }
         player.openInventory(inv);
         OPEN_VIEWERS.add(player.getUniqueId());
     }
@@ -67,6 +75,8 @@ public class AdminRankEditorGUI {
         ItemMeta  meta = item.getItemMeta();
         if (meta == null) return item;
 
+        // Securely bind the rank ID using PersistentDataContainer instead of string parsing
+        meta.getPersistentDataContainer().set(rankIdKey, PersistentDataType.STRING, r.getId());
         meta.setDisplayName("§6§l✎ §e" + r.getDisplayName() + " §8[" + r.getId() + "]");
 
         List<String> lore = new ArrayList<>();
@@ -147,7 +157,7 @@ public class AdminRankEditorGUI {
     // ── Click Handling ────────────────────────────────────────────────────────
 
     public void handleClick(Player player, int slot, String invTitle) {
-        if (slot < 0) return;
+        if (player == null || slot < 0) return;
 
         switch (slot) {
             case 45 -> handleCreateRank(player);
@@ -160,11 +170,11 @@ public class AdminRankEditorGUI {
                 if (item == null || item.getType() != Material.BOOK) return;
                 ItemMeta meta = item.getItemMeta();
                 if (meta == null) return;
-                String display = meta.getDisplayName();
-                int idxOpen    = display.lastIndexOf('[');
-                int idxClose   = display.lastIndexOf(']');
-                if (idxOpen < 0 || idxClose <= idxOpen) return;
-                String rankId  = display.substring(idxOpen + 1, idxClose);
+
+                // Extract rank ID reliably via PDC instead of parsing display name strings
+                String rankId = meta.getPersistentDataContainer().get(rankIdKey, PersistentDataType.STRING);
+                if (rankId == null || rankId.isBlank()) return;
+
                 player.closeInventory();
                 new RankDetailEditorGUI(plugin).open(player, rankId);
             }
@@ -197,6 +207,6 @@ public class AdminRankEditorGUI {
         player.sendMessage("§8§m                                                  ");
     }
 
-    public static boolean isOpen(UUID uuid)    { return OPEN_VIEWERS.contains(uuid); }
-    public static void    setClosed(UUID uuid) { OPEN_VIEWERS.remove(uuid); }
+    public static boolean isOpen(UUID uuid)    { return uuid != null && OPEN_VIEWERS.contains(uuid); }
+    public static void    setClosed(UUID uuid) { if (uuid != null) OPEN_VIEWERS.remove(uuid); }
 }

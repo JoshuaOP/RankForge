@@ -21,19 +21,28 @@ public class RateLimiter {
 
     /**
      * Check if the UUID is allowed to act now.
-     * If allowed, records the current time for future checks.
-     * @return true if allowed, false if still in cooldown.
+     * If allowed, records the current time for future checks atomically.
+     * @return true if allowed, false if still in cooldown or null.
      */
     public boolean tryAcquire(UUID id) {
+        if (id == null) return false;
         long now = System.currentTimeMillis();
-        Long last = lastAction.get(id);
-        if (last != null && (now - last) < cooldownMs) return false;
-        lastAction.put(id, now);
-        return true;
+        final boolean[] allowed = {false};
+
+        lastAction.compute(id, (k, last) -> {
+            if (last == null || (now - last) >= cooldownMs) {
+                allowed[0] = true;
+                return now;
+            }
+            return last;
+        });
+
+        return allowed[0];
     }
 
-    /** Remaining cooldown in milliseconds, or 0 if not in cooldown. */
+    /** Remaining cooldown in milliseconds, or 0 if not in cooldown or null. */
     public long remainingMs(UUID id) {
+        if (id == null) return 0;
         Long last = lastAction.get(id);
         if (last == null) return 0;
         long diff = cooldownMs - (System.currentTimeMillis() - last);
@@ -41,7 +50,11 @@ public class RateLimiter {
     }
 
     /** Remove a player's cooldown entry (e.g., on logout). */
-    public void remove(UUID id) { lastAction.remove(id); }
+    public void remove(UUID id) {
+        if (id != null) {
+            lastAction.remove(id);
+        }
+    }
 
     /** Clean up all expired entries. Call periodically. */
     public void purgeExpired() {
