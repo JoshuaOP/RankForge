@@ -21,43 +21,21 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li>Uses {@link System#currentTimeMillis()} — entirely independent of server TPS
  *       or Minecraft tick rate. Accurate even during lag spikes, TPS drops, or GC pauses.</li>
  *   <li>On JOIN the persisted lifetime total from {@link PlayerData} is loaded as the
- *       session base. The current wall-clock time is recorded as the session start.</li>
- *   <li>{@link #getPlayTime(UUID)} always returns baseMinutes + elapsed since join,
- *       giving a live, accurate value without requiring a flush.</li>
- *   <li>On QUIT the final total is flushed to the {@link com.joshuaop.rankforge.db.CacheManager}
- *       so the normal sync/save pipeline persists it correctly.</li>
+ *       session base, with clock-skew protection.</li>
  *   <li>Thread-safe: all maps use {@link ConcurrentHashMap}; reads and flushes are
  *       safe from any thread.</li>
  * </ul>
- *
- * <h3>Storage</h3>
- * Playtime is stored as cumulative minutes (long) in {@link PlayerData#playTime()}.
- * Both YAML and MySQL backends persist and restore this value across restarts.
- * Sub-minute precision is intentionally discarded at flush time — sessions shorter than
- * 60 seconds do not award a minute of playtime, preventing inflated counts.
- *
- * <h3>Migration</h3>
- * Existing data has {@code playTime = 0}. On first join after the update the
- * tracker initialises from the stored value (zero) and begins accumulating from that
- * point. No conversion of the old vanilla {@code PLAY_ONE_MINUTE} statistic is needed
- * because the stat itself was inaccurate (tick-based) and would compound the existing error.
  */
 public class PlaytimeTracker implements Listener {
 
     private final RankForge plugin;
 
     /**
-     * Wall-clock timestamp (ms) at which the player joined this session.
-     * Absent if the player is offline.
+     * Internal container holding a player's session baseline and start timestamp.
      */
-    private final ConcurrentHashMap<UUID, Long> sessionStart = new ConcurrentHashMap<>();
+    private record SessionData(long baseMinutes, long startTimeMillis) {}
 
-    /**
-     * Lifetime playtime total (minutes) as loaded from storage at the start of this session.
-     * We compute the running total as {@code base + elapsed} rather than mutating the base
-     * on every flush, which prevents double-counting.
-     */
-    private final ConcurrentHashMap<UUID, Long> sessionBase = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, SessionData> activeSessions = new ConcurrentHashMap<>();
 
     public PlaytimeTracker(RankForge plugin) {
         this.plugin = plugin;
@@ -67,36 +45,41 @@ public class PlaytimeTracker implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerJoin(PlayerJoinEvent event) {
-        UUID uuid = event.getPlayer().getUniqueId();
-        long stored = loadStoredMinutes(uuid, event.getPlayer().getName());
-        sessionBase.put(uuid, stored);
-        sessionStart.put(uuid, System.currentTimeMillis());
+        Player player = event.getPlayer();
+        if (player == null) return;
+        
+        UUID uuid = player.getUniqueId();
+        long stored = loadStoredMinutes(uuid, player.getName());
+        
+        activeSessions.put(uuid, new SessionData(stored, System.currentTimeMillis()));
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerQuit(PlayerQuitEvent event) {
-        UUID uuid = event.getPlayer().getUniqueId();
+        Player player = event.getPlayer();
+        if (player == null) return;
+        
+        UUID uuid = player.getUniqueId();
         flushToCache(uuid);
-        sessionBase.remove(uuid);
-        sessionStart.remove(uuid);
+        activeSessions.remove(uuid);
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
 
     /**
      * Returns the current lifetime playtime for the player in minutes.
-     * <ul>
-     *   <li>Online  — live value: base from last save + elapsed since join (whole minutes).</li>
-     *   <li>Offline — value stored in {@link PlayerData} via cache or storage.</li>
-     * </ul>
      */
     public long getPlayTime(UUID uuid) {
-        Long start = sessionStart.get(uuid);
-        Long base  = sessionBase.get(uuid);
-        if (start != null && base != null) {
-            long elapsedMinutes = (System.currentTimeMillis() - start) / 60_000L;
-            return base + elapsedMinutes;
+        if (uuid == null) return 0L;
+        
+        SessionData session = activeSessions.get(uuid);
+        if (session != null) {
+            long elapsedMillis = System.currentTimeMillis() - session.startTimeMillis();
+            if (elapsedMillis < 0) elapsedMillis = 0L; // Guard against system clock skew/backwards jumps
+            long elapsedMinutes = elapsedMillis / 60_000L;
+            return session.baseMinutes() + elapsedMinutes;
         }
+        
         // Offline player — read from cache/storage
         if (plugin.getRankManager() != null) {
             PlayerData data = plugin.getRankManager().getCacheManager().getRaw(uuid);
@@ -107,65 +90,62 @@ public class PlaytimeTracker implements Listener {
 
     /**
      * Forcefully set the lifetime playtime for a player (admin override / correction).
-     * Also flushes the new value into the cache immediately.
      */
     public void setPlayTime(UUID uuid, long minutes) {
+        if (uuid == null) return;
         long clamped = Math.max(0L, minutes);
-        sessionBase.put(uuid, clamped);
-        if (sessionStart.containsKey(uuid)) {
-            // Reset the session start so the set value becomes the new baseline
-            sessionStart.put(uuid, System.currentTimeMillis());
-        }
+        
+        activeSessions.put(uuid, new SessionData(clamped, System.currentTimeMillis()));
         flushToCache(uuid);
     }
 
     /**
      * Flush the current accumulated playtime for the given UUID back into the cache.
-     * Called on quit, and by the periodic sync pipeline.
      */
     public void flushToCache(UUID uuid) {
-        Long start = sessionStart.get(uuid);
-        Long base  = sessionBase.get(uuid);
-        if (start == null || base == null) return;
-        if (plugin.getRankManager() == null) return;
+        if (uuid == null || plugin.getRankManager() == null) return;
+
+        SessionData session = activeSessions.get(uuid);
+        if (session == null) return;
 
         var cacheManager = plugin.getRankManager().getCacheManager();
         PlayerData current = cacheManager.getRaw(uuid);
         if (current == null) return;
 
-        long elapsedMinutes = (System.currentTimeMillis() - start) / 60_000L;
-        long newTotal = base + elapsedMinutes;
+        long elapsedMillis = System.currentTimeMillis() - session.startTimeMillis();
+        if (elapsedMillis < 0) elapsedMillis = 0L;
+        
+        long elapsedMinutes = elapsedMillis / 60_000L;
+        long newTotal = session.baseMinutes() + elapsedMinutes;
 
-        if (current.playTime() == newTotal) return; // nothing changed
+        if (current.playTime() == newTotal) return;
 
         cacheManager.put(uuid, current.withPlayTime(newTotal));
     }
 
     /**
      * Flush all online player playtime counters to the cache.
-     * Called before a bulk sync/save to ensure storage reflects current session totals.
      */
     public void flushAll() {
-        for (UUID uuid : sessionStart.keySet()) {
+        for (UUID uuid : activeSessions.keySet()) {
             flushToCache(uuid);
         }
     }
 
     /** Number of players currently being tracked (online count). */
-    public int getTrackedCount() { return sessionStart.size(); }
+    public int getTrackedCount() { return activeSessions.size(); }
 
-    /** Read-only snapshot of active session start times. */
+    /** Read-only snapshot of active session data. */
     public Map<UUID, Long> getActiveSessionStarts() {
-        return java.util.Collections.unmodifiableMap(sessionStart);
+        Map<UUID, Long> starts = new ConcurrentHashMap<>();
+        for (Map.Entry<UUID, SessionData> entry : activeSessions.entrySet()) {
+            starts.put(entry.getKey(), entry.getValue().startTimeMillis());
+        }
+        return java.util.Collections.unmodifiableMap(starts);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    /**
-     * Load the persisted playtime (minutes) for a player from cache or storage.
-     * Prefers raw cache → repository (blocks main thread briefly on join, which
-     * is acceptable since player join is always synchronous in Bukkit).
-     */
     private long loadStoredMinutes(UUID uuid, String playerName) {
         if (plugin.getRankManager() == null) return 0L;
 

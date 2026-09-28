@@ -14,11 +14,23 @@ public class YamlSerializer {
 
     public YamlConfiguration serialize(Collection<RankModel> ranks) {
         YamlConfiguration cfg = new YamlConfiguration();
-        for (RankModel r : ranks) write(cfg, r);
+        if (ranks == null) return cfg;
+        for (RankModel r : ranks) {
+            if (r != null && r.getId() != null) {
+                write(cfg, r);
+            }
+        }
         return cfg;
     }
 
     public void serializeOne(YamlConfiguration cfg, RankModel r) {
+        if (cfg == null || r == null || r.getId() == null) return;
+        String b = "ranks." + r.getId();
+        
+        // Clear existing rank configuration first to prevent stale/removed requirements 
+        // from lingering when updating a single rank.
+        cfg.set(b, null);
+        
         write(cfg, r);
     }
 
@@ -55,15 +67,17 @@ public class YamlSerializer {
             cfg.set(b + ".requirements.statistic-value",   r.getRequiredStatisticValue());
         }
 
-        if (!r.getRequiredQuests().isEmpty())
+        if (r.getRequiredQuests() != null && !r.getRequiredQuests().isEmpty())
             cfg.set(b + ".requirements.quests",            r.getRequiredQuests());
 
-        if (!r.getRequiredWorlds().isEmpty())
+        if (r.getRequiredWorlds() != null && !r.getRequiredWorlds().isEmpty())
             cfg.set(b + ".requirements.worlds",            r.getRequiredWorlds());
 
-        if (!r.getRequiredItems().isEmpty()) {
+        if (r.getRequiredItems() != null && !r.getRequiredItems().isEmpty()) {
             for (Map.Entry<String, Integer> entry : r.getRequiredItems().entrySet()) {
-                cfg.set(b + ".requirements.items." + entry.getKey(), entry.getValue());
+                if (entry.getKey() != null) {
+                    cfg.set(b + ".requirements.items." + entry.getKey(), entry.getValue());
+                }
             }
         }
     }

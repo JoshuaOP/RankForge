@@ -12,6 +12,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Locale;
 
 /**
  * PlaceholderAPI expansion — registers all %rankforge_xxx% placeholders.
@@ -63,20 +64,20 @@ public class RankForgePlaceholders extends PlaceholderExpansion {
                 case "rank_position"        -> String.valueOf(getRankPosition(curId));
                 case "is_max_rank"          -> String.valueOf(next == null);
                 case "next_rank"            -> next != null ? next.getId()          : "MAX";
-                case "next_cost"            -> next != null ? String.format("$%,.0f", next.getRequiredMoney()) : "MAX";
-                case "cost"                 -> cur  != null ? String.format("$%,.0f", cur.getRequiredMoney())  : "0";
-                case "progress"             -> String.format("%.1f", progress);
-                case "progress_percent"     -> String.format("%.1f", progress) + "%";
+                case "next_cost"            -> next != null ? String.format(Locale.ROOT, "$%,.0f", next.getRequiredMoney()) : "MAX";
+                case "cost"                 -> cur  != null ? String.format(Locale.ROOT, "$%,.0f", cur.getRequiredMoney())  : "0";
+                case "progress"             -> String.format(Locale.ROOT, "%.1f", progress);
+                case "progress_percent"     -> String.format(Locale.ROOT, "%.1f", progress) + "%";
                 case "progress_bar"         -> p != null ? svc.getProgressBar(p) : "----------";
                 case "required_progress"    -> next != null ? formatReq(next)      : "§6MAX";
                 case "remaining_progress"   -> calculateRemainingProgress(op, next, balance);
-                case "money"                -> String.format("$%,.0f", balance);
+                case "money"                -> String.format(Locale.ROOT, "$%,.0f", balance);
                 case "has_money"            -> String.valueOf(nextCost == 0 || balance >= nextCost);
-                case "missing_money"        -> next != null ? String.format("$%,.0f", Math.max(0, next.getRequiredMoney() - balance)) : "0";
+                case "missing_money"        -> next != null ? String.format(Locale.ROOT, "$%,.0f", Math.max(0, next.getRequiredMoney() - balance)) : "0";
                 case "requirements_status"  -> p != null ? requirementStatus(p, next) : "§7Offline";
                 case "requirements_detail"  -> p != null ? requirementDetail(p, next) : "§7Offline";
                 case "xp_level"             -> p != null ? String.valueOf(p.getLevel()) : "0";
-                case "xp_progress"          -> p != null ? (p.getExp() >= 0.99f ? "99.9%" : String.format("%.1f", p.getExp() * 100f) + "%") : "0.0%";
+                case "xp_progress"          -> p != null ? (p.getExp() >= 0.99f ? "99.9%" : String.format(Locale.ROOT, "%.1f", p.getExp() * 100f) + "%") : "0.0%";
                 case "player"               -> op.getName() != null ? op.getName() : "Unknown";
                 case "uuid"                 -> op.getUniqueId().toString();
                 case "lang"                 -> plugin.getLangManager().getPlayerLang(op.getUniqueId());
@@ -130,7 +131,7 @@ public class RankForgePlaceholders extends PlaceholderExpansion {
 
     private String formatReq(RankModel next) {
         StringBuilder sb = new StringBuilder();
-        if (next.getRequiredMoney()  > 0) sb.append("$").append(String.format("%,.0f", next.getRequiredMoney())).append(" ");
+        if (next.getRequiredMoney()  > 0) sb.append("$").append(String.format(Locale.ROOT, "%,.0f", next.getRequiredMoney())).append(" ");
         if (next.getRequiredXpLevel() > 0) sb.append("Lv").append(next.getRequiredXpLevel()).append(" ");
         if (next.getRequiredBlockBreaks() > 0) sb.append(next.getRequiredBlockBreaks()).append(" blocks ");
         if (next.getRequiredMobKills() > 0) sb.append(next.getRequiredMobKills()).append(" kills ");
@@ -144,7 +145,7 @@ public class RankForgePlaceholders extends PlaceholderExpansion {
         StringBuilder sb = new StringBuilder();
 
         double moneyLeft = next.getRequiredMoney() - balance;
-        if (moneyLeft > 0) sb.append("$").append(String.format("%,.0f", moneyLeft)).append(" ");
+        if (moneyLeft > 0) sb.append("$").append(String.format(Locale.ROOT, "%,.0f", moneyLeft)).append(" ");
 
         Player p = op.getPlayer();
         if (p != null) {
@@ -157,7 +158,7 @@ public class RankForgePlaceholders extends PlaceholderExpansion {
         if (plugin.getBlockBreakTracker() != null && next.getRequiredBlockBreaks() > 0) {
             long haveBlocks = plugin.getBlockBreakTracker().getCount(op.getUniqueId());
             long leftBlocks = next.getRequiredBlockBreaks() - haveBlocks;
-            if (leftBlocks > 0) sb.append(" ").append(String.format("%,d", leftBlocks)).append(" blocks");
+            if (leftBlocks > 0) sb.append(" ").append(String.format(Locale.ROOT, "%,d", leftBlocks)).append(" blocks");
         }
         return sb.length() > 0 ? sb.toString().trim() : "§aMet";
     }

@@ -18,6 +18,7 @@ import java.util.Set;
  *   <li><b>Missing key injection</b> — Keys present in the bundled default but
  *       absent in the server's file are added without overwriting existing values.</li>
  *   <li><b>All config files</b> — Handles config.yml, gui.yml, and lang/*.yml.</li>
+ *   <li><b>UTF-8 Enforcement</b> — Prevents character corruption for multi-language files.</li>
  * </ul>
  *
  * <p>Invoked on startup and on /rank reload.
@@ -79,12 +80,23 @@ public class ConfigUpdater {
         int added = mergeMissing(defaults, current, "");
 
         if (added > 0) {
-            try {
-                current.save(serverFile);
-            } catch (IOException e) {
-                plugin.getLogger().warning("Could not save updated config "
-                        + resourcePath + ": " + e.getMessage());
+            saveConfigSafely(current, serverFile, resourcePath);
+        }
+    }
+
+    /**
+     * Safely saves a YAML configuration to disk forcing UTF-8 encoding
+     * to prevent character corruption in multi-language files.
+     */
+    private void saveConfigSafely(YamlConfiguration config, File serverFile, String resourcePath) {
+        try {
+            String dumpedYaml = config.saveToString();
+            try (Writer writer = new OutputStreamWriter(new FileOutputStream(serverFile), StandardCharsets.UTF_8)) {
+                writer.write(dumpedYaml);
             }
+        } catch (IOException e) {
+            plugin.getLogger().warning("Could not save updated config "
+                    + resourcePath + ": " + e.getMessage());
         }
     }
 

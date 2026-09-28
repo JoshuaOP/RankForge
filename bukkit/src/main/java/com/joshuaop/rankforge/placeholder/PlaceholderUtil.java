@@ -1,5 +1,6 @@
 package com.joshuaop.rankforge.placeholder;
 
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -11,16 +12,19 @@ public final class PlaceholderUtil {
     private PlaceholderUtil() {}
 
     /**
-     * Replace all {key} tokens in a string with values from the provided map.
-     * Keys must match without the braces (e.g., "rankforge_rank" → "{rankforge_rank}").
+     * Replace all {key} and %key% tokens in a string with values from the provided map.
+     * Keys must match without the enclosing braces/percents.
      */
     public static String resolve(String template, Map<String, String> values) {
-        if (template == null || template.isEmpty()) return template;
+        if (template == null || template.isEmpty() || values == null || values.isEmpty()) {
+            return template;
+        }
         String result = template;
         for (Map.Entry<String, String> entry : values.entrySet()) {
-            String curly  = "{" + entry.getKey() + "}";
+            if (entry.getKey() == null) continue;
+            String curly   = "{" + entry.getKey() + "}";
             String percent = "%" + entry.getKey() + "%";
-            String val = entry.getValue() != null ? entry.getValue() : "";
+            String val     = entry.getValue() != null ? entry.getValue() : "";
             result = result.replace(curly, val).replace(percent, val);
         }
         return result;
@@ -32,11 +36,11 @@ public final class PlaceholderUtil {
      */
     public static Map<String, String> systemPlaceholders(String version, String mcVersion,
                                                           boolean mcSupported) {
-        return Map.of(
-                "rankforge_version",              version,
-                "rankforge_mc_version",           mcVersion,
-                "rankforge_mc_version_supported", String.valueOf(mcSupported),
-                "rankforge_gui_title",            "§8✦ §6RankForge §8✦"
-        );
+        Map<String, String> placeholders = new HashMap<>();
+        placeholders.put("rankforge_version",              version != null ? version : "Unknown");
+        placeholders.put("rankforge_mc_version",           mcVersion != null ? mcVersion : "Unknown");
+        placeholders.put("rankforge_mc_version_supported", String.valueOf(mcSupported));
+        placeholders.put("rankforge_gui_title",            "§8✦ §6RankForge §8✦");
+        return placeholders;
     }
 }
