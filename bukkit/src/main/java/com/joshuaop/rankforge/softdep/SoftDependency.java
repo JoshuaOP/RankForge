@@ -14,7 +14,6 @@ import org.bukkit.event.player.PlayerQuitEvent;
 
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import org.bukkit.permissions.PermissionAttachment;
 
@@ -22,11 +21,9 @@ import org.bukkit.permissions.PermissionAttachment;
  * Unified soft-dependency handler and player event listener.
  *
  * <p>All optional API classes (LuckPerms, Vault Economy, PlaceholderAPI, Floodgate)
- * are intentionally NOT imported at the class level.  Each dependency is isolated
+ * are intentionally NOT imported at the class level. Each dependency is isolated
  * inside its own adapter ({@link LuckPermsHook}, {@link VaultAdapter}) which the JVM
- * only loads after we confirm the corresponding plugin is installed.  This prevents
- * {@code NoClassDefFoundError} / {@code ClassNotFoundException} when optional plugins
- * are absent.</p>
+ * only loads after we confirm the corresponding plugin is installed.</p>
  */
 public class SoftDependency implements Listener {
 
@@ -59,6 +56,10 @@ public class SoftDependency implements Listener {
 
         PlayerData data = plugin.getRankManager().getRepository().load(uuid, player.getName());
 
+        if (data == null) {
+            return; // Safety guard if loading fails entirely
+        }
+
         if (!data.playerName().equals(player.getName())) {
             data = data.withPlayerName(player.getName());
             plugin.getRankManager().getCacheManager().put(uuid, data);
@@ -72,8 +73,6 @@ public class SoftDependency implements Listener {
                     "Repaired orphaned rank for " + player.getName() + " → '" + fallback + "'");
         }
 
-        // Restore any previously-persisted /rank bypassreq completions for this session
-        // (survives server restarts and reconnects — see BypassRegistry.loadPersisted).
         if (plugin.getBypassRegistry() != null) {
             plugin.getBypassRegistry().loadPersisted(uuid, data.completedRequirements());
         }
@@ -86,6 +85,14 @@ public class SoftDependency implements Listener {
     public void onPlayerQuit(PlayerQuitEvent event) {
         Player player = event.getPlayer();
         UUID   uuid   = player.getUniqueId();
+
+        // Clean up fallback local permission attachments if used
+        PermissionAttachment attachment = rankAttachments.remove(uuid);
+        if (attachment != null) {
+            try {
+                attachment.remove();
+            } catch (Exception ignored) {}
+        }
 
         plugin.getCosmeticManager().onLogout(player);
 
@@ -103,7 +110,7 @@ public class SoftDependency implements Listener {
 
             final PlayerData toSave = data;
             plugin.getTaskScheduler().async(() -> {
-                if (!plugin.getRankManager().getRepository().save(toSave)) {
+                if (toSave != null && !plugin.getRankManager().getRepository().save(toSave)) {
                     plugin.getLogger().warning("Quit save was not confirmed for " + uuid + ".");
                 }
             });
@@ -122,7 +129,7 @@ public class SoftDependency implements Listener {
         try {
             vaultAdapter = VaultAdapter.create(plugin);
             if (vaultAdapter != null) {
-                plugin.getLogger().info("\u2713 Vault integration enabled.");
+                plugin.getLogger().info("✔ Vault integration enabled.");
             } else {
                 plugin.getLogger().warning("Vault found but no Economy provider is registered.");
             }
@@ -132,30 +139,27 @@ public class SoftDependency implements Listener {
     }
 
     public double getBalance(Player player) {
-        if (vaultAdapter == null) return 0;
+        if (vaultAdapter == null || player == null) return 0;
         return vaultAdapter.getBalance(player);
     }
 
     public double getBalance(OfflinePlayer player) {
-        if (vaultAdapter == null) return 0;
+        if (vaultAdapter == null || player == null) return 0;
         return vaultAdapter.getBalance(player);
     }
 
     public boolean withdraw(Player player, double amount) {
-        if (vaultAdapter == null) return false;
+        if (vaultAdapter == null || player == null) return false;
         return vaultAdapter.withdraw(player, amount);
     }
 
     public boolean refund(Player player, double amount) {
-        if (vaultAdapter == null) return false;
+        if (vaultAdapter == null || player == null) return false;
         return vaultAdapter.refund(player, amount);
     }
 
-    /**
-     * Set an offline/online player's Vault balance to an exact amount.
-     */
     public void setBalance(OfflinePlayer player, double targetAmount) {
-        if (vaultAdapter == null) return;
+        if (vaultAdapter == null || player == null) return;
         vaultAdapter.setBalance(player, targetAmount);
     }
 
@@ -169,7 +173,7 @@ public class SoftDependency implements Listener {
         try {
             luckPermsHook = LuckPermsHook.create(plugin);
             if (luckPermsHook != null) {
-                plugin.getLogger().info("\u2713 LuckPerms integration enabled.");
+                plugin.getLogger().info("✔ LuckPerms integration enabled.");
             } else {
                 plugin.getLogger().warning("LuckPerms found but service provider is unavailable.");
             }
@@ -185,69 +189,59 @@ public class SoftDependency implements Listener {
     }
 
     public boolean applyRankPermissions(Player player, String oldRankId, String rankId) {
+        if (player == null || !player.isOnline()) return false;
         RankModel model = plugin.getRankManager().getRank(rankId);
 
         if (luckPermsHook != null) {
             try {
+                // Non-blocking async application with callback handling to prevent main thread freezing
                 var operation = luckPermsHook.applyPermissions(player, model);
                 if (operation == null) return false;
-                // LuckPerms modifies users asynchronously.  Returning here would
-                // let RankService persist a rank before the permission update was
-                // actually accepted.  The operation itself does not access Bukkit
-                // objects, so waiting for its bounded completion is safe.
-                operation.get(10, TimeUnit.SECONDS);
+                
+                operation.whenComplete((result, error) -> {
+                    if (error != null) {
+                        plugin.getLogger().log(Level.WARNING,
+                                "LuckPerms rank permission update failed asynchronously for "
+                                        + player.getUniqueId(), error);
+                    }
+                });
                 return true;
             } catch (RuntimeException e) {
                 plugin.getLogger().log(Level.WARNING,
                         "Could not apply RankForge LuckPerms permissions for "
                                 + player.getName(), e);
                 return false;
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                plugin.getLogger().log(Level.WARNING,
-                        "Interrupted while applying LuckPerms permissions for "
-                                + player.getName(), e);
-                return false;
-            } catch (Exception e) {
-                plugin.getLogger().log(Level.WARNING,
-                        "LuckPerms rank permission update failed for "
-                                + player.getUniqueId(), e);
-                return false;
             }
         } else {
-            PermissionAttachment previous = rankAttachments.get(player.getUniqueId());
-            PermissionAttachment attachment = null;
+            // Fallback native PermissionAttachments
             try {
-                attachment = player.addAttachment(plugin);
-                if (model != null) {
+                PermissionAttachment attachment = player.addAttachment(plugin);
+                if (model != null && model.getPermissions() != null) {
                     for (String perm : model.getPermissions()) {
-                        if (perm != null && !perm.isBlank()) attachment.setPermission(perm, true);
+                        if (perm != null && !perm.isBlank()) {
+                            attachment.setPermission(perm.trim(), true);
+                        }
                     }
                 }
+                
+                PermissionAttachment previous = rankAttachments.put(player.getUniqueId(), attachment);
                 if (previous != null) {
                     try {
                         previous.remove();
-                    } catch (RuntimeException e) {
-                        try { attachment.remove(); } catch (Exception ignored) {}
-                        throw e;
-                    }
+                    } catch (Exception ignored) {}
                 }
-                rankAttachments.put(player.getUniqueId(), attachment);
                 return true;
             } catch (RuntimeException e) {
-                if (attachment != null) {
-                    try { attachment.remove(); } catch (Exception ignored) {}
-                }
-                if (previous == null) rankAttachments.remove(player.getUniqueId());
-                else rankAttachments.put(player.getUniqueId(), previous);
-                plugin.getLogger().log(java.util.logging.Level.WARNING,
-                        "Could not apply RankForge permissions for " + player.getName(), e);
+                plugin.getLogger().log(Level.WARNING,
+                        "Could not apply native RankForge permissions for " + player.getName(), e);
                 return false;
             }
         }
     }
 
     public void removeRankPermissions(Player player, String rankId) {
+        if (player == null) return;
+        
         if (luckPermsHook != null) {
             try {
                 var operation = luckPermsHook.removePermissions(
@@ -255,21 +249,26 @@ public class SoftDependency implements Listener {
                 if (operation != null) {
                     operation.whenComplete((ignored, error) -> {
                         if (error != null) {
-                            plugin.getLogger().log(java.util.logging.Level.WARNING,
+                            plugin.getLogger().log(Level.WARNING,
                                     "LuckPerms permission cleanup failed for "
                                             + player.getUniqueId(), error);
                         }
                     });
                 }
             } catch (RuntimeException e) {
-                plugin.getLogger().log(java.util.logging.Level.WARNING,
+                plugin.getLogger().log(Level.WARNING,
                         "Could not clean up LuckPerms permissions for "
                                 + player.getName(), e);
             }
             return;
         }
+        
         PermissionAttachment attachment = rankAttachments.remove(player.getUniqueId());
-        if (attachment != null) attachment.remove();
+        if (attachment != null) {
+            try {
+                attachment.remove();
+            } catch (Exception ignored) {}
+        }
     }
 
     // ── PlaceholderAPI ────────────────────────────────────────────────────────
@@ -277,7 +276,7 @@ public class SoftDependency implements Listener {
     private void checkPapi() {
         papiEnabled = plugin.getServer().getPluginManager().getPlugin("PlaceholderAPI") != null;
         if (papiEnabled) {
-            plugin.getLogger().info("\u2713 PlaceholderAPI integration enabled.");
+            plugin.getLogger().info("✔ PlaceholderAPI integration enabled.");
         } else {
             plugin.getLogger().info("PlaceholderAPI not found. Placeholder support disabled.");
         }
@@ -289,26 +288,20 @@ public class SoftDependency implements Listener {
         floodgateEnabled = plugin.getServer().getPluginManager().getPlugin("floodgate") != null
                 || plugin.getServer().getPluginManager().getPlugin("Floodgate") != null;
         if (floodgateEnabled) {
-            plugin.getLogger().info("\u2713 Floodgate integration enabled.");
+            plugin.getLogger().info("✔ Floodgate integration enabled.");
         } else {
             plugin.getLogger().info("Floodgate not found. Bedrock support disabled.");
         }
     }
 
-    /**
-     * Returns {@code true} if the player is connecting via Geyser/Floodgate (Bedrock Edition).
-     */
     public boolean isBedrockPlayer(Player player) {
         if (player == null) return false;
         String prefix = plugin.getConfig().getString("crossplay.bedrock-prefix", ".");
         return player.getName().startsWith(prefix);
     }
 
-    /**
-     * Returns a crossplay-safe display name by stripping the Bedrock prefix if present.
-     * Example: {@code ".JoshuaBE"} → {@code "JoshuaBE"}.
-     */
     public String getCleanName(Player player) {
+        if (player == null) return "";
         if (!isBedrockPlayer(player)) return player.getName();
         String prefix = plugin.getConfig().getString("crossplay.bedrock-prefix", ".");
         return player.getName().startsWith(prefix) ? player.getName().substring(prefix.length()) : player.getName();

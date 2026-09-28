@@ -10,22 +10,24 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.logging.Level;
 
 /**
  * Isolated LuckPerms integration.
  * All references to the LuckPerms API are contained here so the JVM only
  * loads this class (and the LuckPerms API classes) after we have confirmed
  * that LuckPerms is installed.
- * Never import or reference this class from code that runs before the
- * LuckPerms presence check — use DependencyManager / SoftDependency instead.
  */
 class LuckPermsHook {
 
     private static final NodeMetadataKey<String> MANAGED =
             NodeMetadataKey.of("rankforge-managed", String.class);
+    
+    private final JavaPlugin plugin;
     private final LuckPerms api;
 
-    private LuckPermsHook(LuckPerms api) {
+    private LuckPermsHook(JavaPlugin plugin, LuckPerms api) {
+        this.plugin = plugin;
         this.api = api;
     }
 
@@ -35,33 +37,55 @@ class LuckPermsHook {
      * @return a ready {@link LuckPermsHook}, or {@code null} if LuckPerms is not available.
      */
     static LuckPermsHook create(JavaPlugin plugin) {
+        if (plugin.getServer().getPluginManager().getPlugin("LuckPerms") == null ||
+                !plugin.getServer().getPluginManager().isPluginEnabled("LuckPerms")) {
+            return null;
+        }
+
         RegisteredServiceProvider<LuckPerms> rsp =
                 plugin.getServer().getServicesManager().getRegistration(LuckPerms.class);
         if (rsp == null) return null;
         LuckPerms lp = rsp.getProvider();
-        return lp != null ? new LuckPermsHook(lp) : null;
+        return lp != null ? new LuckPermsHook(plugin, lp) : null;
     }
 
     CompletableFuture<Void> applyPermissions(Player player, RankModel model) {
+        if (player == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+        
         UUID uuid = player.getUniqueId();
         return api.getUserManager().modifyUser(uuid, user -> {
             // Only remove nodes marked as ours. Other plugins' identical
             // permission nodes remain untouched.
             user.data().clear(node -> node.getMetadata(MANAGED)
                     .map("true"::equals).orElse(false));
-            if (model == null) return;
+            
+            if (model == null || model.getPermissions() == null) return;
+            
             for (String perm : model.getPermissions()) {
-                user.data().add(Node.builder(perm).value(true)
+                if (perm == null || perm.trim().isEmpty()) continue;
+                user.data().add(Node.builder(perm.trim()).value(true)
                         .withMetadata(MANAGED, "true").build());
             }
+        }).exceptionally(ex -> {
+            plugin.getLogger().log(Level.WARNING, "Failed to apply LuckPerms permissions for " + player.getName(), ex);
+            return null;
         });
     }
 
     CompletableFuture<Void> removePermissions(Player player, RankModel model) {
+        if (player == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+
         UUID uuid = player.getUniqueId();
         return api.getUserManager().modifyUser(uuid, user -> {
             user.data().clear(node -> node.getMetadata(MANAGED)
                     .map("true"::equals).orElse(false));
+        }).exceptionally(ex -> {
+            plugin.getLogger().log(Level.WARNING, "Failed to remove LuckPerms permissions for " + player.getName(), ex);
+            return null;
         });
     }
 }
