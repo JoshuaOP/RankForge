@@ -24,6 +24,7 @@ public class TaskScheduler {
 
     /** Schedule a repeating task (sync). Returns a tracking ID. */
     public int repeat(Runnable action, long delayTicks, long periodTicks) {
+        if (action == null) return -1;
         BukkitTask task = new BukkitRunnable() {
             @Override public void run() { action.run(); }
         }.runTaskTimer(plugin, delayTicks, periodTicks);
@@ -32,6 +33,7 @@ public class TaskScheduler {
 
     /** Schedule a repeating async task. Returns a tracking ID. */
     public int repeatAsync(Runnable action, long delayTicks, long periodTicks) {
+        if (action == null) return -1;
         BukkitTask task = new BukkitRunnable() {
             @Override public void run() { action.run(); }
         }.runTaskTimerAsynchronously(plugin, delayTicks, periodTicks);
@@ -40,49 +42,72 @@ public class TaskScheduler {
 
     /** Run a task on the main thread after a delay. Cleans up after execution. */
     public void delayed(Runnable action, long delayTicks) {
+        if (action == null) return;
         final int id = idGen.incrementAndGet();
         
+        // Reserve the ID slot first to prevent execution-before-registration race conditions
+        tasks.put(id, null);
+
         BukkitTask task = new BukkitRunnable() {
             @Override 
             public void run() { 
                 try {
                     action.run(); 
                 } finally {
-                    tasks.remove(id); // Clean up tracking map instantly when finished
+                    tasks.remove(id);
                 }
             }
         }.runTaskLater(plugin, delayTicks);
         
-        tasks.put(id, task);
+        // If the task was cancelled or completed instantly, clean up; otherwise update reference
+        if (task.isCancelled()) {
+            tasks.remove(id);
+        } else {
+            tasks.put(id, task);
+        }
     }
 
     /** Run a task asynchronously immediately. Tracks execution context. */
     public void async(Runnable action) {
+        if (action == null) return;
         final int id = idGen.incrementAndGet();
         
+        // Reserve the ID slot first to prevent instant async execution race conditions
+        tasks.put(id, null);
+
         BukkitTask task = new BukkitRunnable() {
             @Override
             public void run() {
                 try {
                     action.run();
                 } finally {
-                    tasks.remove(id); // Clean up tracking map instantly when finished
+                    tasks.remove(id);
                 }
             }
         }.runTaskAsynchronously(plugin);
         
-        tasks.put(id, task);
+        if (task.isCancelled()) {
+            tasks.remove(id);
+        } else {
+            tasks.put(id, task);
+        }
     }
 
     /** Cancel a specific tracked task. */
     public void cancel(int trackingId) {
         BukkitTask task = tasks.remove(trackingId);
-        if (task != null && !task.isCancelled()) task.cancel();
+        if (task != null && !task.isCancelled()) {
+            task.cancel();
+        }
     }
 
     /** Cancel all tracked tasks — call on plugin shutdown. */
     public void cancelAll() {
-        tasks.values().forEach(t -> { if (!t.isCancelled()) t.cancel(); });
+        tasks.values().forEach(t -> {
+            if (t != null && !t.isCancelled()) {
+                t.cancel();
+            }
+        });
         tasks.clear();
     }
 
