@@ -38,21 +38,19 @@ public class RankDataRepository {
     }
 
     public PlayerData load(UUID uuid, String playerName) {
-        PlayerData cached = cache.getRaw(uuid);
-        if (cached != null && cached.isValidFor(uuid)) return cached;
-
+        // If MySQL is active and ready for reads, query the database source of truth first,
+        // bypassing any pre-existing or bulk-loaded YAML cache records that might shadow it.
         if (db.isReadyForReads()) {
             try {
                 PlayerData loaded = loadFromMySQL(uuid);
                 if (loaded != null) {
-                    cache.put(uuid, loaded);
+                    cache.put(uuid, loaded, false);
                     return loaded;
                 }
 
                 // A successful, validated query with no row is a legitimate new
                 // player. It is safe to create a default, unlike a failed query.
                 PlayerData created = makeDefault(uuid, playerName, true);
-                cache.put(uuid, created);
                 return created;
             } catch (Exception e) {
                 db.logMySQLOperationFailure(
@@ -61,6 +59,10 @@ public class RankDataRepository {
                 db.markUnavailable(e);
             }
         }
+
+        // Fall back to checking local memory cache if MySQL is down / not ready
+        PlayerData cached = cache.getRaw(uuid);
+        if (cached != null && cached.isValidFor(uuid)) return cached;
 
         PlayerData yamlData = loadFromYaml(uuid, playerName);
         if (yamlData != null) return yamlData;
@@ -96,7 +98,7 @@ public class RankDataRepository {
         try {
             PlayerData data = yaml.loadPlayer(uuid, playerName);
             if (data != null && data.isValidFor(uuid)) {
-                cache.put(uuid, data);
+                cache.put(uuid, data, false);
                 return data;
             }
             plugin.getLogger().warning("YAML player data for " + uuid
@@ -267,7 +269,7 @@ public class RankDataRepository {
         PlayerData data = PlayerData.defaultData(uuid,
                 playerName == null || playerName.isBlank() ? "Unknown" : playerName,
                 defaultRankId);
-        if (cacheIt) cache.put(uuid, data);
+        if (cacheIt) cache.put(uuid, data, false);
         return data;
     }
 

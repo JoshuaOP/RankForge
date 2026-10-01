@@ -186,8 +186,9 @@ public final class RankForge extends JavaPlugin {
         rankManager = new RankManager(this);
         rankManager.loadRanks();
 
-        // Warm up cache from local YAML records as an initial baseline
-        if (yamlPlayerDataStorage != null) {
+        // Warm up cache from local YAML records only if MySQL is not connected/active
+        boolean mysqlActive = databaseManager != null && databaseManager.isConnected();
+        if (!mysqlActive && yamlPlayerDataStorage != null) {
             var stored = yamlPlayerDataStorage.loadAll();
             if (stored != null) {
                 for (var pd : stored) {

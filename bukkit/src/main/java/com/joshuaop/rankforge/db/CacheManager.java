@@ -46,8 +46,16 @@ public class CacheManager {
     // ── Write ─────────────────────────────────────────────────────────────────
 
     public void put(UUID id, PlayerData data) {
+        put(id, data, true);
+    }
+
+    /**
+     * Explicit state control to prevent background, offline, or bulk-loaded records
+     * from incorrectly claiming active online session locks.
+     */
+    public void put(UUID id, PlayerData data, boolean activeOnline) {
         if (id == null || data == null || !data.isValidFor(id)) return;
-        cache.put(id, new Entry(data, System.currentTimeMillis() + ttlMs, true));
+        cache.put(id, new Entry(data, System.currentTimeMillis() + ttlMs, activeOnline));
     }
 
     /**
@@ -66,11 +74,18 @@ public class CacheManager {
     }
 
     public void putAll(Map<UUID, PlayerData> map) {
+        putAll(map, true);
+    }
+
+    /**
+     * Bulk insert map with controlled online-state enforcement.
+     */
+    public void putAll(Map<UUID, PlayerData> map, boolean activeOnline) {
         if (map == null || map.isEmpty()) return;
         long exp = System.currentTimeMillis() + ttlMs;
         map.forEach((k, v) -> {
             if (k != null && v != null && v.isValidFor(k)) {
-                cache.put(k, new Entry(v, exp, true));
+                cache.put(k, new Entry(v, exp, activeOnline));
             }
         });
     }
@@ -185,7 +200,7 @@ public class CacheManager {
         cache.forEach((uuid, current) -> {
             if (current.activeOnline() || current.expiresAt() >= now) {
                 PlayerData snapshot = stitchLiveData(current.data(), current.activeOnline());
-                put(uuid, snapshot);
+                put(uuid, snapshot, current.activeOnline());
                 snapshots.add(snapshot);
             }
         });
