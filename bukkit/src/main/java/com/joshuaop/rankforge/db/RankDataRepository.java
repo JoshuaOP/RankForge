@@ -38,8 +38,10 @@ public class RankDataRepository {
     }
 
     public PlayerData load(UUID uuid, String playerName) {
-        PlayerData cached = cache.getRaw(uuid);
-        if (cached != null && cached.isValidFor(uuid)) return cached;
+        if (cache.contains(uuid)) {
+            PlayerData cached = cache.getRaw(uuid);
+            if (cached != null && cached.isValidFor(uuid)) return cached;
+        }
 
         if (db.isReadyForReads()) {
             try {

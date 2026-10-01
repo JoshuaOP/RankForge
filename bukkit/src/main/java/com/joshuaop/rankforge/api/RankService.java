@@ -14,12 +14,15 @@ import org.bukkit.Statistic;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
-import java.util.Map;
-import java.util.UUID;
 
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.logging.Level;
 
 /**
- * Core business logic for all rank operations.
+ * Core business logic for all rank operations, handling rank-ups, admin sets,
+ * resets, inventory/statistic consumption, and safe state rollbacks.
  */
 public class RankService {
 
@@ -31,6 +34,10 @@ public class RankService {
         this.progressService = progressService;
     }
 
+    /**
+     * Attempts to rank up a player, enforcing thread safety, queue checks,
+     * requirement verification, and atomic state transitions.
+     */
     public boolean rankUp(Player player) {
         if (!Bukkit.isPrimaryThread()) {
             plugin.getLogger().warning("Rank-up rejected off the Bukkit main thread.");
@@ -111,7 +118,6 @@ public class RankService {
         Bukkit.getPluginManager().callEvent(event);
         if (event.isCancelled()) return false;
 
-        // Use the rank ID resolved by the event (it may have been changed by a listener).
         String resolvedId = event.getNewRankId();
         RankModel nextModel = rm.getRank(resolvedId);
         if (nextModel == null) {
@@ -134,13 +140,9 @@ public class RankService {
                 if (statistic.getType() == Statistic.Type.UNTYPED) {
                     oldRequiredStatistic = safeStatistic(player, statistic);
                 }
-            } catch (IllegalArgumentException ignored) {
-                // Invalid IDs are reported by the normal requirement check.
-            }
+            } catch (IllegalArgumentException ignored) {}
         }
 
-        // Confirm the asynchronous LuckPerms operation before charging or changing
-        // the persistent rank.  A failed permission operation starts no transaction.
         if (!plugin.getSoftDependency().applyRankPermissions(player, oldRankId, resolvedId)) {
             plugin.getLangManager().send(player, "rankup_fail");
             return false;
@@ -165,14 +167,13 @@ public class RankService {
             }
         }
 
-        boolean persisted = false;
         try {
-            // All changes made below are represented by the one final snapshot.
             PlayerData currentRankData = plugin.getRankManager().getCacheManager()
                     .getRaw(player.getUniqueId());
             if (currentRankData == null) currentRankData = data;
             plugin.getRankManager().getCacheManager().put(
                     player.getUniqueId(), currentRankData.withRank(resolvedId));
+            
             if (plugin.getExperienceManager() != null) {
                 plugin.getExperienceManager().deductRankup(player, resolvedId);
             }
@@ -182,19 +183,28 @@ public class RankService {
                     .getRaw(player.getUniqueId());
             if (afterRank != null && !afterRank.completedRequirements().isEmpty()) {
                 plugin.getRankManager().getCacheManager().put(player.getUniqueId(),
-                        afterRank.withCompletedRequirements(java.util.Set.of()));
+                        afterRank.withCompletedRequirements(Set.of()));
             }
 
             PlayerData finalData = plugin.getRankManager().getCacheManager()
                     .getRaw(player.getUniqueId());
-            persisted = finalData != null
-                    && plugin.getRankManager().getRepository().save(finalData);
+            
+            if (finalData != null) {
+                Runnable saveTask = () -> {
+                    boolean saved = plugin.getRankManager().getRepository().save(finalData);
+                    if (!saved) {
+                        if (plugin.getYamlPlayerDataStorage() != null) {
+                            plugin.getYamlPlayerDataStorage().savePlayerForEmergencyFallback(finalData);
+                        } else if (plugin.isDebug()) {
+                            plugin.getLogger().warning("Async rank-up persistence failed for " + player.getUniqueId());
+                        }
+                    }
+                };
+                Bukkit.getScheduler().runTaskAsynchronously(plugin, saveTask);
+            }
         } catch (RuntimeException e) {
-            plugin.getLogger().log(java.util.logging.Level.WARNING,
+            plugin.getLogger().log(Level.WARNING,
                     "Rank-up state preparation failed for " + player.getUniqueId() + ".", e);
-        }
-
-        if (!persisted) {
             if (charged && !plugin.getSoftDependency().refund(player, cost)) {
                 plugin.getLogger().severe("Could not refund " + cost + " to "
                         + player.getUniqueId() + " after rank-up failure.");
@@ -203,13 +213,10 @@ public class RankService {
                     oldArmor, oldOffhand, oldMobKills, requiredStatisticId,
                     oldRequiredStatistic);
             restorePermissions(player, oldRankId);
-            plugin.getLogger().severe("Rank-up for " + player.getUniqueId()
-                    + " was rolled back because immediate persistence was not confirmed.");
             plugin.getLangManager().send(player, "rankup_fail");
             return false;
         }
 
-        // Session bypasses are consumed only after the complete rank-up was saved.
         if (plugin.getBypassRegistry() != null) {
             plugin.getBypassRegistry().clearAll(player.getUniqueId());
         }
@@ -219,6 +226,7 @@ public class RankService {
         plugin.getAnnouncementManager().sendRankup(player, display);
         plugin.getCosmeticManager().onRankup(player, resolvedId, display);
         executeRankCommands(player, resolvedId);
+        
         if (plugin.getHistoryManager() != null) {
             plugin.getHistoryManager().record(new RankHistoryEntry(
                     player.getUniqueId(), player.getName(), oldRankId, resolvedId,
@@ -228,44 +236,13 @@ public class RankService {
         return true;
     }
 
-    /**
-     * Resets every progress-based requirement counter to zero (or consumes items)
-     * after a rank-up.
-     *
-     * <h3>Reset behaviour per type:</h3>
-     * <ul>
-     *   <li><b>block-breaks</b> — reset to 0 unconditionally
-     *       ({@link com.joshuaop.rankforge.tracker.BlockBreakTracker})</li>
-     *   <li><b>playtime</b> — <em>not reset</em>; treated as a cumulative lifetime
-     *       statistic so progress carries over to the next rank's requirement</li>
-     *   <li><b>mob-kills</b> — Bukkit {@code MOB_KILLS} statistic reset to 0 unconditionally</li>
-     *   <li><b>statistic</b> — the untyped Bukkit statistic required by {@code achieved}
-     *       is reset to 0 (rank-specific, conditional on the rank having a statistic field)</li>
-     *   <li><b>items</b> — required items consumed from the player's inventory
-     *       (rank-specific, conditional on the rank having item requirements)</li>
-     *   <li><b>quests</b> — always live-checked via permission nodes; not reset here</li>
-     *   <li><b>custom</b> — always live-checked via the API; not reset here</li>
-     *   <li><b>money / xp-level</b> — always deducted in {@link #doRankUp} before this
-     *       method is called; never part of this reset</li>
-     *   <li><b>permission / worlds</b> — always live-checked; not reset here</li>
-     * </ul>
-     *
-     * @param player    the player who just ranked up
-     * @param achieved  the {@link RankModel} whose requirements were just met; may be
-     *                  {@code null} if an event listener resolved an unknown rank ID —
-     *                  unconditional resets still run; rank-specific ones are skipped
-     */
     private void resetTrackedProgress(Player player, RankModel achieved) {
         UUID uuid = player.getUniqueId();
 
-        // ── Unconditional resets (always run regardless of rank model) ────────
-
-        // Block Breaks — clears the RankForge custom counter
         if (plugin.getBlockBreakTracker() != null) {
             plugin.getBlockBreakTracker().setCount(uuid, 0L);
         }
 
-        // Mob Kills — clears the vanilla MOB_KILLS statistic
         try {
             player.setStatistic(Statistic.MOB_KILLS, 0);
         } catch (Exception e) {
@@ -276,24 +253,14 @@ public class RankService {
             }
         }
 
-        // ── Rank-specific resets (skipped when achieved rank model is unavailable) ─
-
         if (achieved == null) return;
 
-        // Statistic — reset whichever untyped Bukkit statistic the achieved rank required
-        // so that consecutive ranks sharing the same statistic always start from zero.
         String statId = achieved.getRequiredStatisticId();
         if (statId != null && !statId.isBlank() && achieved.getRequiredStatisticValue() > 0) {
             try {
                 Statistic stat = Statistic.valueOf(statId.toUpperCase());
                 if (stat.getType() == Statistic.Type.UNTYPED) {
                     player.setStatistic(stat, 0);
-                }
-            } catch (IllegalArgumentException e) {
-                if (plugin.isDebug()) {
-                    plugin.getLogger().warning(
-                            "[RankService] Unknown statistic '" + statId
-                                    + "' — cannot reset. Check ranks.yml spelling.");
                 }
             } catch (Exception e) {
                 if (plugin.isDebug()) {
@@ -304,23 +271,12 @@ public class RankService {
             }
         }
 
-        // Items — consume required items from the player's inventory.
         Map<String, Integer> requiredItems = achieved.getRequiredItems();
         if (requiredItems != null && !requiredItems.isEmpty()) {
             consumeRequiredItems(player, requiredItems);
         }
     }
 
-    /**
-     * Removes the specified item quantities from the player's inventory.
-     *
-     * <p>Each material is removed up to the required amount. If the player has fewer
-     * than the required amount (e.g. due to a race condition), the remainder is silently
-     * ignored — the requirement check already confirmed they had enough.
-     *
-     * @param player the player whose inventory to modify
-     * @param items  map of material name → quantity to remove
-     */
     private void consumeRequiredItems(Player player, Map<String, Integer> items) {
         for (Map.Entry<String, Integer> entry : items.entrySet()) {
             try {
@@ -328,12 +284,6 @@ public class RankService {
                 int      amount = entry.getValue();
                 if (amount <= 0) continue;
                 player.getInventory().removeItem(new ItemStack(mat, amount));
-            } catch (IllegalArgumentException e) {
-                if (plugin.isDebug()) {
-                    plugin.getLogger().warning(
-                            "[RankService] Unknown material '" + entry.getKey()
-                                    + "' — cannot consume items. Check ranks.yml spelling.");
-                }
             } catch (Exception e) {
                 if (plugin.isDebug()) {
                     plugin.getLogger().warning(
@@ -389,7 +339,7 @@ public class RankService {
                 }
             }
         } catch (Exception e) {
-            plugin.getLogger().log(java.util.logging.Level.WARNING,
+            plugin.getLogger().log(Level.WARNING,
                     "Could not fully restore live rank-up state for "
                             + player.getUniqueId() + ".", e);
         }
@@ -408,9 +358,6 @@ public class RankService {
         PlayerData oldData = loadData(player);
         String     oldRank = oldData.rankId();
 
-        // Permissions are confirmed before the new rank is published to the cache
-        // or persisted.  This prevents a database/YAML rank from getting ahead of
-        // the player's effective permissions.
         if (!plugin.getSoftDependency().applyRankPermissions(player, oldRank, newRankId)) {
             plugin.getLogger().warning("RankForge permission update was not accepted for "
                     + player.getUniqueId() + ".");
@@ -419,15 +366,18 @@ public class RankService {
 
         PlayerData updated = oldData.withRank(newRankId);
         plugin.getRankManager().getCacheManager().put(player.getUniqueId(), updated);
-        boolean persisted = plugin.getRankManager().getRepository().save(updated);
-        if (!persisted) {
-            plugin.getRankManager().getCacheManager().put(player.getUniqueId(), oldData);
-            restorePermissions(player, oldRank);
-            plugin.getLogger().severe("Could not immediately persist rank change for "
-                    + player.getUniqueId() + ".");
-            player.sendMessage("§cThe rank change could not be saved. Please contact an administrator.");
-            return false;
-        }
+        
+        Runnable saveTask = () -> {
+            boolean saved = plugin.getRankManager().getRepository().save(updated);
+            if (!saved) {
+                if (plugin.getYamlPlayerDataStorage() != null) {
+                    plugin.getYamlPlayerDataStorage().savePlayerForEmergencyFallback(updated);
+                } else {
+                    plugin.getLogger().warning("Async rank persistence failed for " + player.getUniqueId() + "; data retained in cache/YAML fallback.");
+                }
+            }
+        };
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, saveTask);
 
         String display = plugin.getRankManager().getDisplayName(newRankId);
         plugin.getSoundManager().playRankup(player);

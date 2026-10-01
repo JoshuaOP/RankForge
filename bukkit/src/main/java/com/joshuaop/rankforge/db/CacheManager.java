@@ -47,7 +47,19 @@ public class CacheManager {
 
     public void put(UUID id, PlayerData data) {
         if (id == null || data == null || !data.isValidFor(id)) return;
-        cache.put(id, new Entry(data, System.currentTimeMillis() + ttlMs, true));
+        boolean online = isPlayerOnline(id);
+        cache.put(id, new Entry(data, System.currentTimeMillis() + ttlMs, online));
+    }
+
+    public void put(UUID id, PlayerData data, boolean activeOnline) {
+        if (id == null || data == null || !data.isValidFor(id)) return;
+        cache.put(id, new Entry(data, System.currentTimeMillis() + ttlMs, activeOnline));
+    }
+
+    private boolean isPlayerOnline(UUID id) {
+        if (id == null) return false;
+        Player player = Bukkit.getPlayer(id);
+        return player != null && player.isOnline();
     }
 
     /**
@@ -67,10 +79,12 @@ public class CacheManager {
 
     public void putAll(Map<UUID, PlayerData> map) {
         if (map == null || map.isEmpty()) return;
-        long exp = System.currentTimeMillis() + ttlMs;
+        long now = System.currentTimeMillis();
+        long exp = now + ttlMs;
         map.forEach((k, v) -> {
             if (k != null && v != null && v.isValidFor(k)) {
-                cache.put(k, new Entry(v, exp, true));
+                boolean online = isPlayerOnline(k);
+                cache.put(k, new Entry(v, online ? exp : now + ttlMs, online));
             }
         });
     }

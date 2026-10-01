@@ -186,16 +186,22 @@ public final class RankForge extends JavaPlugin {
         rankManager = new RankManager(this);
         rankManager.loadRanks();
 
-        // Warm up cache from local YAML records as an initial baseline
-        if (yamlPlayerDataStorage != null) {
+        // Only preload YAML into cache if MySQL is inactive/unavailable.
+        // When MySQL is healthy, skip preloading to prevent stale YAML data from overriding fresh database records.
+        boolean isMySqlActive = databaseManager != null && databaseManager.isReadyForReads();
+
+        if (!isMySqlActive && yamlPlayerDataStorage != null) {
+            getLogger().info("MySQL is inactive or unavailable. Loading player data from YAML fallback...");
             var stored = yamlPlayerDataStorage.loadAll();
             if (stored != null) {
                 for (var pd : stored) {
-                    if (!rankManager.getCacheManager().contains(pd.uuid())) {
+                    if (pd != null && pd.uuid() != null && !rankManager.getCacheManager().contains(pd.uuid())) {
                         rankManager.getCacheManager().put(pd.uuid(), pd);
                     }
                 }
             }
+        } else {
+            getLogger().info("MySQL is active. Skipping YAML cache preloading to ensure database integrity.");
         }
 
         antiBypassManager     = new AntiBypassManager(this);
@@ -400,6 +406,6 @@ public final class RankForge extends JavaPlugin {
     public ExpansionRegistry             getExpansionRegistry()            { return expansionRegistry; }
     public HookRegistry                  getHookRegistry()                 { return hookRegistry; }
     public ExternalGUIRegistry           getExternalGUIRegistry()          { return externalGUIRegistry; }
-    public RestAPIServer                 getRestAPIServer()                 { return restAPIServer; }
+    public RestAPIServer                 getRestAPIServer()                { return restAPIServer; }
     public UpdateChecker                 getUpdateChecker()                { return updateChecker; }
 }

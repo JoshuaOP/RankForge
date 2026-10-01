@@ -30,6 +30,9 @@ public class RankManager {
         this.repository   = new RankDataRepository(plugin, cacheManager);
     }
 
+    /**
+     * Loads and indexes all ranks from the rank YAML configuration.
+     */
     public void loadRanks() {
         synchronized (lock) {
             if (plugin.getRankYamlManager() != null && plugin.getRankYamlManager().getConfig() != null) {
@@ -50,7 +53,7 @@ public class RankManager {
     }
 
     /**
-     * Synchronously flushes all cached player data during server shutdown.
+     * Flushes all cached player data during server shutdown.
      *
      * <p>Uses {@link DatabaseManager#isReadyForReads()} instead of {@code isConnected()}
      * to prevent writing to a database that is undergoing active recovery or broken.
@@ -74,7 +77,6 @@ public class RankManager {
                 if (repository.save(data)) {
                     successCount++;
                 } else if (yamlStorage != null) {
-                    // Fallback individual record to YAML if a single MySQL write fails
                     yamlStorage.savePlayerForEmergencyFallback(data);
                 }
             }

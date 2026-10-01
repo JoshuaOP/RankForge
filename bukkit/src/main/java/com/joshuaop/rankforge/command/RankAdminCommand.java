@@ -14,6 +14,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -30,7 +31,7 @@ import java.util.function.Consumer;
  * Admin subcommands handled here:
  *   editor, create, delete/remove, set, reset, force,
  *   reload, debug, stats, security, sound, playerlist,
- *   xp set/add (admin variant)
+ *   bypassreq, xp set/add (admin variant)
  */
 public class RankAdminCommand {
 
@@ -128,11 +129,7 @@ public class RankAdminCommand {
         if (args.length == 2) {
             return switch (args[0].toLowerCase()) {
                 case "editor"          -> filter(List.of("reload", "drag"), args[1]);
-                case "set", "reset", "force", "bypassreq" -> {
-                    List<String> names = new ArrayList<>();
-                    Bukkit.getOnlinePlayers().forEach(p -> names.add(p.getName()));
-                    yield filter(names, args[1]);
-                }
+                case "set", "reset", "force", "bypassreq" -> filter(getKnownPlayerNames(), args[1]);
                 case "delete", "remove" -> filter(new ArrayList<>(plugin.getRankManager().getRankIds()), args[1]);
                 case "sound"           -> filter(List.of("test", "reload"), args[1]);
                 default                -> List.of();
@@ -143,12 +140,8 @@ public class RankAdminCommand {
             return switch (args[0].toLowerCase()) {
                 case "set", "force" -> filter(new ArrayList<>(plugin.getRankManager().getRankIds()), args[2]);
                 case "bypassreq"    -> filter(new ArrayList<>(BypassRegistry.BYPASSABLE), args[2]);
-                case "xp" -> {
-                    List<String> names = new ArrayList<>();
-                    Bukkit.getOnlinePlayers().forEach(p -> names.add(p.getName()));
-                    yield filter(names, args[2]);
-                }
-                default -> List.of();
+                case "xp"           -> filter(getKnownPlayerNames(), args[2]);
+                default             -> List.of();
             };
         }
 
@@ -159,10 +152,8 @@ public class RankAdminCommand {
 
     /**
      * /rank bypassreq <player> <requirement>
-     * Instantly marks a specific requirement as met for the targeted online player,
-     * and persists the completion to their existing player-data record (YAML or
-     * MySQL, whichever storage is active) so it survives reloads, restarts, and
-     * reconnects until they rank up.
+     * Instantly marks a specific requirement as met for the targeted player (online or offline),
+     * and persists the completion to their player-data record so it survives reloads and restarts.
      */
     private void doBypassReq(CommandSender s, String[] args) {
         if (args.length < 3) {
@@ -196,82 +187,70 @@ public class RankAdminCommand {
             return;
         }
 
-        // Target must be online — bypasses are in-memory only
-        Player target = Bukkit.getPlayer(targetName);
-        if (target == null) {
+        // Resolve UUID supporting both online and offline/cached players
+        UUID resolvedUuid = resolveOfflineUUID(targetName);
+        if (resolvedUuid == null) {
             s.sendMessage("§c✘ Player §e" + targetName
-                    + " §cis not online. Bypasses require an online player.");
+                    + " §chas no stored data and has never joined.");
             return;
         }
 
-        BypassRegistry reg  = plugin.getBypassRegistry();
-        UUID           uuid = target.getUniqueId();
+        Runnable asyncTask = () -> {
+            try {
+                CacheManager cache = plugin.getRankManager().getCacheManager();
+                boolean saved = false;
 
-        // Prevent duplicate bypass
-        if (reg.isBypassed(uuid, reqType)) {
-            s.sendMessage("§e⚠ §e" + target.getName()
-                    + " §ealready has the §e" + reqType + " §erequirement bypassed.");
-            return;
-        }
+                for (int attempt = 0; attempt < 4 && !saved; attempt++) {
+                    PlayerData current = cache.getRaw(resolvedUuid);
+                    if (current == null) {
+                        current = plugin.getRankManager().getRepository().load(resolvedUuid, targetName);
+                    }
+                    if (current == null) break;
 
-        // Grant the bypass in-memory so it takes effect immediately for the current session
-        reg.grant(uuid, reqType);
+                    PlayerData candidate = current.withCompletedRequirement(reqType);
+                    if (!cache.compareAndSet(resolvedUuid, current, candidate)) continue;
+                    
+                    if (plugin.getRankManager().getRepository().save(candidate)) {
+                        saved = true;
+                    } else {
+                        cache.compareAndSet(resolvedUuid, candidate, current);
+                    }
+                }
 
-        // Persist the completion to the player's existing data record — the same
-        // YAML/MySQL row used for rank, experience, etc. — so it survives /rank reload,
-        // server restarts, and reconnects, regardless of the configured storage type.
-        boolean persisted = persistBypass(uuid, reqType);
+                if (!saved) {
+                    Bukkit.getScheduler().runTask(plugin, () ->
+                            s.sendMessage("§c✘ Could not safely save requirement bypass for §e" + targetName + "§c."));
+                    return;
+                }
 
-        s.sendMessage("§a✔ Bypassed §e" + reqType
-                + " §arequirement for §e" + target.getName()
-                + "§a. Active until they rank up.");
-        if (!persisted) {
-            s.sendMessage("§e⚠ Warning: the bypass is active for this session but could not "
-                    + "be saved to storage. Check the console for details.");
-        }
-        target.sendMessage("§6[RankForge] §7An admin has completed your §e"
-                + reqType + " §7requirement.");
+                // If currently online, grant in-memory registry access immediately
+                Player target = Bukkit.getPlayer(resolvedUuid);
+                if (target != null) {
+                    plugin.getBypassRegistry().grant(resolvedUuid, reqType);
+                }
 
-        // Refresh the rank GUI immediately if the player has it open
-        if (AnimatedRankTreeGUI.isOpen(uuid)) {
-            Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                if (target.isOnline()) new AnimatedRankTreeGUI(plugin).open(target);
-            }, 1L);
-        }
-    }
-
-    /**
-     * Immediately persists a granted requirement bypass to the target's player-data
-     * record, updating the in-memory cache synchronously (so /rank progress and
-     * /rank requirements reflect it right away) and writing through to whichever
-     * storage backend is active (YAML or MySQL) without creating a separate
-     * bypass file/table.
-     *
-     * @return {@code true} if the cache update and storage write both completed
-     *         without throwing; {@code false} if a failure occurred (already logged
-     *         and handled gracefully by the underlying repository — never crashes).
-     */
-    private boolean persistBypass(UUID uuid, String reqType) {
-        try {
-            CacheManager cache   = plugin.getRankManager().getCacheManager();
-            PlayerData   current = cache.get(uuid);
-            if (current == null) {
-                current = plugin.getRankManager().getRepository().load(uuid,
-                        Bukkit.getOfflinePlayer(uuid).getName());
+                final String finalReq = reqType;
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    s.sendMessage("§a✔ Bypassed §e" + finalReq
+                            + " §arequirement for §e" + targetName
+                            + "§a. Active until they rank up.");
+                    if (target != null && target.isOnline()) {
+                        target.sendMessage("§6[RankForge] §7An admin has completed your §e"
+                                + finalReq + " §7requirement.");
+                        if (AnimatedRankTreeGUI.isOpen(resolvedUuid)) {
+                            new AnimatedRankTreeGUI(plugin).open(target);
+                        }
+                    }
+                });
+            } catch (Exception e) {
+                plugin.getLogger().warning("Failed to persist bypass '" + reqType
+                        + "' for " + targetName + ": " + e.getMessage());
+                Bukkit.getScheduler().runTask(plugin, () ->
+                        s.sendMessage("§c✘ An internal error occurred while bypassing the requirement."));
             }
-            PlayerData updated = current.withCompletedRequirement(reqType);
-            cache.put(uuid, updated);
-            boolean saved = plugin.getRankManager().getRepository().save(updated);
-            if (!saved) {
-                plugin.getLogger().warning("Bypass data was updated in memory but was not persisted for "
-                        + uuid + ".");
-            }
-            return saved;
-        } catch (Exception e) {
-            plugin.getLogger().warning("Failed to persist bypass '" + reqType
-                    + "' for " + uuid + ": " + e.getMessage());
-            return false;
-        }
+        };
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, asyncTask);
     }
 
     private void openPlayerList(Player p) {
@@ -382,7 +361,7 @@ public class RankAdminCommand {
             return;
         }
 
-        String defaultRank = plugin.getConfig().getString("ranks.default-rank", "Guest");
+        String defaultRank = plugin.getRankManager().getDefaultRankId();
         applyOfflineRankChange(s, targetName, defaultRank, "RESET");
     }
 
@@ -421,7 +400,6 @@ public class RankAdminCommand {
             return;
         }
 
-        // Offline path — applyOfflineRankChange sends its own success message
         applyOfflineRankChange(s, targetName, rankId, "SET");
     }
 
@@ -430,7 +408,7 @@ public class RankAdminCommand {
                 ? plugin.getExperienceManager().getXp(p) : 0L;
         plugin.getLangManager().send(p, "debug_info", Map.of(
                 "rank", getCurrentRank(p),
-                "db",   String.valueOf(plugin.getDatabaseManager().isConnected()),
+                "db",   String.valueOf(plugin.getDatabaseManager().isReadyForReads()),
                 "lang", plugin.getLangManager().getPlayerLang(p.getUniqueId())));
         p.sendMessage("§7XP: §a" + String.format("%,d", xp));
         if (plugin.getHistoryManager() != null) {
@@ -441,7 +419,7 @@ public class RankAdminCommand {
     }
 
     private void doStats(CommandSender s) {
-        String storageType = plugin.getDatabaseManager().isConnected() ? "§aMySQL" : "§eYAML File";
+        String storageType = (plugin.getDatabaseManager() != null && plugin.getDatabaseManager().isReadyForReads()) ? "§aMySQL" : "§eYAML File";
         String mcVer = Bukkit.getBukkitVersion().split("-")[0];
         s.sendMessage("§8§m                                ");
         s.sendMessage("  §6§lRankForge §7System Stats");
@@ -492,15 +470,13 @@ public class RankAdminCommand {
      */
     private void applyOfflineRankChange(CommandSender s, String targetName,
                                         String rankId, String changeType) {
-        // UUID resolution may consult Bukkit's offline-player API, so complete
-        // it before crossing to the asynchronous persistence task.
         UUID resolvedUuid = resolveOfflineUUID(targetName);
         if (resolvedUuid == null) {
             s.sendMessage("§c✘ Player §e" + targetName
                     + " §chas no stored data and is not online.");
             return;
         }
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+        Runnable asyncTask = () -> {
             try {
                 UUID targetUuid = resolvedUuid;
 
@@ -509,9 +485,6 @@ public class RankAdminCommand {
                 String prevRank = null;
                 boolean saved = false;
 
-                // A login, quit save, or another admin update may publish a newer
-                // record while this task is running.  Never replace that record
-                // with the snapshot captured by an older attempt.
                 for (int attempt = 0; attempt < 4 && !saved; attempt++) {
                     PlayerData current = cache.getRaw(targetUuid);
                     if (current == null) {
@@ -527,7 +500,13 @@ public class RankAdminCommand {
                         prevRank = current.rankId();
                         saved = true;
                     } else {
-                        cache.compareAndSet(targetUuid, candidate, current);
+                        if (plugin.getYamlPlayerDataStorage() != null && plugin.getYamlPlayerDataStorage().savePlayerForEmergencyFallback(candidate)) {
+                            updated = candidate;
+                            prevRank = current.rankId();
+                            saved = true;
+                        } else {
+                            cache.compareAndSet(targetUuid, candidate, current);
+                        }
                     }
                 }
 
@@ -583,10 +562,39 @@ public class RankAdminCommand {
                         s.sendMessage("§c✘ An internal error occurred while updating "
                                 + targetName + "'s rank."));
             }
-        });
+        };
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, asyncTask);
     }
 
-    // ── Validation helpers ────────────────────────────────────────────────────
+    // ── Validation & Helper Methods ───────────────────────────────────────────
+
+    /**
+     * Gathers names of all known players (online + cached/stored offline players)
+     * for enhanced tab completion.
+     */
+    private List<String> getKnownPlayerNames() {
+        Set<String> names = new HashSet<>();
+        Bukkit.getOnlinePlayers().forEach(p -> names.add(p.getName()));
+        
+        try {
+            for (var entry : plugin.getRankManager().getCacheManager().getCache().entrySet()) {
+                PlayerData pd = entry.getValue().data();
+                if (pd != null && pd.playerName() != null) {
+                    names.add(pd.playerName());
+                }
+            }
+            if (plugin.getYamlPlayerDataStorage() != null) {
+                for (PlayerData pd : plugin.getYamlPlayerDataStorage().loadAll()) {
+                    if (pd.playerName() != null) {
+                        names.add(pd.playerName());
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
+
+        return new ArrayList<>(names);
+    }
 
     /**
      * Validates a player name, supporting Java and Floodgate/Bedrock players.
@@ -632,8 +640,7 @@ public class RankAdminCommand {
             }
         }
 
-        if (!plugin.getDatabaseManager().isConnected()
-                && plugin.getYamlPlayerDataStorage() != null) {
+        if (plugin.getYamlPlayerDataStorage() != null) {
             for (PlayerData pd : plugin.getYamlPlayerDataStorage().loadAll()) {
                 if (name.equalsIgnoreCase(pd.playerName())) {
                     return pd.uuid();
