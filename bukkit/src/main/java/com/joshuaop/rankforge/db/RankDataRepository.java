@@ -4,6 +4,9 @@ import com.joshuaop.rankforge.RankForge;
 
 import java.sql.*;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 
 /**
@@ -22,6 +25,9 @@ public class RankDataRepository {
     private final RankForge plugin;
     private final DatabaseManager db;
     private final CacheManager cache;
+    
+    // Dedicated asynchronous executor to prevent main-thread blocking during database operations
+    private final ExecutorService saveExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "RankForge-AsyncSave-Worker"));
 
     public RankDataRepository(RankForge plugin, CacheManager cache) {
         this.plugin = plugin;
@@ -34,7 +40,8 @@ public class RankDataRepository {
     }
 
     private Object getLock(UUID uuid) {
-        return lockStripes[Math.abs(uuid.hashCode() % LOCK_COUNT)];
+        // Fix: Use Math.floorMod to correctly handle negative hash codes (e.g., Integer.MIN_VALUE)
+        return lockStripes[Math.floorMod(uuid.hashCode(), LOCK_COUNT)];
     }
 
     public PlayerData load(UUID uuid, String playerName) {
@@ -111,7 +118,7 @@ public class RankDataRepository {
     }
 
     /**
-     * Persists a complete immutable snapshot. The return value is authoritative:
+     * Persists a complete immutable snapshot synchronously. The return value is authoritative:
      * true means the selected active backend confirmed the write.
      */
     public boolean save(PlayerData requested) {
@@ -149,6 +156,38 @@ public class RankDataRepository {
     }
 
     /**
+     * Asynchronously persists a player snapshot, shielding the main thread from database latency.
+     */
+    public void saveAsync(PlayerData requested) {
+        if (requested == null || !requested.isValidFor(requested.uuid())) return;
+        saveExecutor.submit(() -> save(requested));
+    }
+
+    /**
+     * Persists a collection of player snapshots in a single high-performance batch operation.
+     */
+    public boolean saveAll(Collection<PlayerData> players) {
+        if (players == null || players.isEmpty()) return true;
+
+        if (db.isReadyForReads()) {
+            if (saveAllToMySQL(players)) return true;
+            db.markUnavailable(new SQLException("MySQL batch player save was not confirmed."));
+        }
+
+        YamlPlayerDataStorage yaml = plugin.getYamlPlayerDataStorage();
+        if (yaml != null) {
+            try {
+                yaml.saveAll(players);
+                plugin.getLogger().info("Player data batch saved to YAML while MySQL is unavailable.");
+                return true;
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.SEVERE, "Could not persist player data batch to YAML fallback.", e);
+            }
+        }
+        return false;
+    }
+
+    /**
      * Writes one recovery snapshot to the verified MySQL pool.
      *
      * <p>This intentionally uses {@link DatabaseManager#isConnected()}, not
@@ -168,6 +207,14 @@ public class RankDataRepository {
                     ? current : requested;
             return saveToMySQL(data);
         }
+    }
+
+    /**
+     * Writes a recovery collection of snapshots to the verified MySQL pool using batching.
+     */
+    public boolean saveAllForRecovery(Collection<PlayerData> players) {
+        if (players == null || players.isEmpty() || !db.isConnected()) return false;
+        return saveAllToMySQL(players);
     }
 
     private boolean saveToMySQL(PlayerData data) {
@@ -201,6 +248,54 @@ public class RankDataRepository {
         } catch (SQLException e) {
             db.logMySQLOperationFailure(
                     "MySQL save failed for " + data.uuid() + ".", e);
+            return false;
+        }
+    }
+
+    private boolean saveAllToMySQL(Collection<PlayerData> players) {
+        String sql = """
+                INSERT INTO rf_players
+                    (uuid, player_name, rank_id, experience, money, language, block_breaks, playtime_minutes, completed_requirements)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    player_name            = VALUES(player_name),
+                    rank_id                = VALUES(rank_id),
+                    experience             = VALUES(experience),
+                    money                  = VALUES(money),
+                    language               = VALUES(language),
+                    block_breaks           = VALUES(block_breaks),
+                    playtime_minutes       = VALUES(playtime_minutes),
+                    completed_requirements = VALUES(completed_requirements)
+                """;
+        try (Connection conn = db.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            
+            conn.setAutoCommit(false);
+            try {
+                for (PlayerData data : players) {
+                    if (data == null || !data.isValidFor(data.uuid())) continue;
+                    ps.setString(1, data.uuid().toString());
+                    ps.setString(2, data.playerName());
+                    ps.setString(3, data.rankId());
+                    ps.setLong(4, data.experience());
+                    ps.setDouble(5, data.money());
+                    ps.setString(6, data.language());
+                    ps.setLong(7, data.blockBreaks());
+                    ps.setLong(8, data.playTime());
+                    ps.setString(9, String.join(",", data.completedRequirements()));
+                    ps.addBatch();
+                }
+                ps.executeBatch();
+                conn.commit();
+                return true;
+            } catch (SQLException e) {
+                try { conn.rollback(); } catch (SQLException ignored) {}
+                throw e;
+            } finally {
+                try { conn.setAutoCommit(true); } catch (SQLException ignored) {}
+            }
+        } catch (SQLException e) {
+            db.logMySQLOperationFailure("MySQL batch save failed.", e);
             return false;
         }
     }
@@ -300,5 +395,20 @@ public class RankDataRepository {
                 playTime,
                 completedRequirements
         );
+    }
+
+    /**
+     * Cleanly shuts down the asynchronous save queue.
+     */
+    public void shutdown() {
+        saveExecutor.shutdown();
+        try {
+            if (!saveExecutor.awaitTermination(3, TimeUnit.SECONDS)) {
+                saveExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            saveExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 }

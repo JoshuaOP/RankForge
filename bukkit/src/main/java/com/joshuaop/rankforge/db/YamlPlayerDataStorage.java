@@ -452,13 +452,17 @@ public class YamlPlayerDataStorage {
                         + " because shutdown has started.");
                 return null;
             }
-            if (emergencyRequestGeneration != null
-                    && latestPlayerWrite.getOrDefault(input.uuid(), Long.MIN_VALUE)
-                            > emergencyRequestGeneration) {
+            long generation = emergencyRequestGeneration != null
+                    ? emergencyRequestGeneration
+                    : ++writeGeneration;
+
+            if (latestPlayerWrite.getOrDefault(snapshot.uuid(), Long.MIN_VALUE) > generation) {
                 return null;
             }
+            
+            latestPlayerWrite.put(snapshot.uuid(), generation);
             write(snapshot);
-            return queueAsyncWrite(List.of(snapshot.uuid()), emergencyRequestGeneration);
+            return queueAsyncWrite(List.of(snapshot.uuid()), generation);
         }
     }
 
@@ -478,19 +482,19 @@ public class YamlPlayerDataStorage {
                 logger.warning("Ignoring YAML player save batch because shutdown has started.");
                 return null;
             }
-            for (PlayerData snapshot : snapshots) write(snapshot);
-            return queueAsyncWrite(snapshots.stream().map(PlayerData::uuid).toList());
+            long generation = ++writeGeneration;
+            for (PlayerData snapshot : snapshots) {
+                if (latestPlayerWrite.getOrDefault(snapshot.uuid(), Long.MIN_VALUE) > generation) {
+                    continue;
+                }
+                latestPlayerWrite.put(snapshot.uuid(), generation);
+                write(snapshot);
+            }
+            return queueAsyncWrite(snapshots.stream().map(PlayerData::uuid).toList(), generation);
         }
     }
 
-    private SaveOperation queueAsyncWrite(List<UUID> affectedUuids) {
-        return queueAsyncWrite(affectedUuids, null);
-    }
-
-    private SaveOperation queueAsyncWrite(
-            List<UUID> affectedUuids,
-            Long requestedGeneration
-    ) {
+    private SaveOperation queueAsyncWrite(List<UUID> affectedUuids, long generation) {
         SaveOperation operation = new SaveOperation();
         boolean scheduleWriter = false;
         long token = 0L;
@@ -501,9 +505,6 @@ public class YamlPlayerDataStorage {
                 operation.complete(false);
                 return operation;
             }
-            long generation = requestedGeneration == null
-                    ? ++writeGeneration : requestedGeneration;
-            for (UUID uuid : affectedUuids) latestPlayerWrite.put(uuid, generation);
             
             try {
                 snapshot = new YamlSaveSnapshot(
@@ -603,7 +604,7 @@ public class YamlPlayerDataStorage {
                 }
                 boolean succeeded = true;
                 try {
-                    succeeded = writeSnapshot(snapshot.yamlContent(), snapshot.affectedUuids());
+                    succeeded = writeSnapshot(snapshot.yamlContent(), snapshot.affectedUuids(), snapshot.snapshotGeneration());
                 } catch (Throwable t) {
                     succeeded = false;
                     logger.log(Level.SEVERE, "Unexpected failure while saving playerdata.yml"
@@ -656,10 +657,21 @@ public class YamlPlayerDataStorage {
         }
     }
 
-    private boolean writeSnapshot(String content, List<UUID> affectedUuids) {
+    private boolean writeSnapshot(String content, List<UUID> affectedUuids, long generation) {
         Path target = dataFile.toPath();
         Path temporary = null;
         synchronized (fileWriteLock) {
+            // Guard against racing with a newer generation write that already flushed to disk
+            if (affectedUuids != null) {
+                synchronized (writeLock) {
+                    for (UUID uuid : affectedUuids) {
+                        if (latestPlayerWrite.getOrDefault(uuid, 0L) > generation) {
+                            return true; // A newer write already completed or surpassed this
+                        }
+                    }
+                }
+            }
+
             try {
                 temporary = Files.createTempFile(target.getParent(), "playerdata-", ".tmp");
                 Files.writeString(temporary, content, StandardCharsets.UTF_8);
@@ -776,7 +788,7 @@ public class YamlPlayerDataStorage {
             asyncWriteScheduled = true;
         }
 
-        boolean succeeded = writeSnapshot(snapshot.yamlContent(), snapshot.affectedUuids());
+        boolean succeeded = writeSnapshot(snapshot.yamlContent(), snapshot.affectedUuids(), snapshot.snapshotGeneration());
         synchronized (writeLock) {
             inFlightSnapshot = null;
             completeOperations(snapshot, succeeded);
@@ -790,7 +802,20 @@ public class YamlPlayerDataStorage {
 
     private boolean saveEmergencyPlayerDirect(PlayerData data, long requestGeneration) {
         synchronized (writeLock) {
+            // Reject this write if a newer generation has already been saved for this player
+            if (latestPlayerWrite.getOrDefault(data.uuid(), Long.MIN_VALUE) > requestGeneration) {
+                return false;
+            }
+
             PlayerData liveData = stitchRuntimeData(data);
+
+            // Re-check after stitching runtime data just in case state changed during collection
+            if (latestPlayerWrite.getOrDefault(liveData.uuid(), Long.MIN_VALUE) > requestGeneration) {
+                return false;
+            }
+
+            latestPlayerWrite.put(liveData.uuid(), requestGeneration);
+
             YamlConfiguration emergency = new YamlConfiguration();
             try {
                 if (dataFile.exists()) {
@@ -801,11 +826,10 @@ public class YamlPlayerDataStorage {
                 String emergencyContent = emergency.saveToString();
                 
                 // Directly commit via file write lock without waiting for async thread pool locks during exit
-                boolean succeeded = writeSnapshot(emergencyContent, List.of(liveData.uuid()));
+                boolean succeeded = writeSnapshot(emergencyContent, List.of(liveData.uuid()), requestGeneration);
                 if (succeeded) {
                     yaml = emergency; // Keep memory state synced
                     writeGeneration = Math.max(writeGeneration, requestGeneration);
-                    latestPlayerWrite.put(liveData.uuid(), requestGeneration);
                 }
                 return succeeded;
             } catch (Exception e) {
@@ -859,7 +883,7 @@ public class YamlPlayerDataStorage {
 
     private boolean persist(YamlConfiguration configuration) {
         try {
-            return writeSnapshot(configuration.saveToString(), List.of());
+            return writeSnapshot(configuration.saveToString(), List.of(), Long.MAX_VALUE);
         }
         catch (Exception e) {
             plugin.getLogger().log(Level.WARNING, "Failed to save playerdata.yml.", e);

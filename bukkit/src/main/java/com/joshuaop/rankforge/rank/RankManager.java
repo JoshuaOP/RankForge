@@ -8,6 +8,10 @@ import com.joshuaop.rankforge.db.RankDataRepository;
 import com.joshuaop.rankforge.db.YamlPlayerDataStorage;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.logging.Level;
 
 /**
  * Thread-safe in-memory index of all loaded ranks.
@@ -53,49 +57,66 @@ public class RankManager {
     }
 
     /**
-     * Flushes all cached player data during server shutdown.
+     * Flushes all cached player data during server shutdown using an asynchronous
+     * batch save with a strict bounded timeout.
      *
      * <p>Uses {@link DatabaseManager#isReadyForReads()} instead of {@code isConnected()}
      * to prevent writing to a database that is undergoing active recovery or broken.
-     * If MySQL is unavailable or recovering, all cached records fall back directly to
-     * {@link YamlPlayerDataStorage}.
+     * If MySQL is unavailable, recovering, or exceeds the 3-second timeout window,
+     * all cached records fall back directly to {@link YamlPlayerDataStorage}.
      */
     public void flushNow() {
         plugin.getLogger().info("[RankForge] Flushing all cached player data for server shutdown...");
 
         Collection<PlayerData> snapshots = cacheManager.snapshotOnlineAndUnexpired();
-        DatabaseManager dbManager = plugin.getDatabaseManager();
-        YamlPlayerDataStorage yamlStorage = plugin.getYamlPlayerDataStorage();
+        if (snapshots.isEmpty()) {
+            plugin.getLogger().info("[RankForge] No player data to flush.");
+            return;
+        }
 
+        DatabaseManager dbManager = plugin.getDatabaseManager();
         boolean safeForMySQL = dbManager != null && dbManager.isReadyForReads();
 
         if (safeForMySQL) {
-            plugin.getLogger().info("[RankForge] Flushing " + snapshots.size() + " player records to MySQL...");
-            int successCount = 0;
+            plugin.getLogger().info("[RankForge] Flushing " + snapshots.size() + " player records to MySQL via batch save with a 3-second timeout...");
+            try {
+                CompletableFuture<Boolean> flushFuture = 
+                    CompletableFuture.supplyAsync(() -> repository.saveAll(snapshots));
 
-            for (PlayerData data : snapshots) {
-                if (repository.save(data)) {
-                    successCount++;
-                } else if (yamlStorage != null) {
-                    yamlStorage.savePlayerForEmergencyFallback(data);
+                boolean success = flushFuture.get(3, TimeUnit.SECONDS);
+                if (success) {
+                    plugin.getLogger().info("[RankForge] Successfully saved all " + snapshots.size() + " records to MySQL via batch.");
+                    return;
+                } else {
+                    plugin.getLogger().warning("[RankForge] MySQL batch save reported failure, falling back to emergency YAML save...");
                 }
+            } catch (TimeoutException e) {
+                plugin.getLogger().warning("[RankForge] MySQL shutdown flush timed out after 3 seconds! Aborting DB write and falling back to YAML...");
+            } catch (Exception e) {
+                plugin.getLogger().log(Level.WARNING, "[RankForge] MySQL shutdown flush encountered an error, falling back to YAML...", e);
             }
-            plugin.getLogger().info("[RankForge] Successfully saved " + successCount + "/" + snapshots.size() + " records to MySQL.");
+            
+            // Fallback execution if MySQL times out or fails
+            flushToYamlFallback(snapshots);
         } else {
             plugin.getLogger().warning("[RankForge] MySQL is not ready during shutdown (recovering or disconnected). "
                     + "Flushing all " + snapshots.size() + " player records directly to YAML storage.");
+            flushToYamlFallback(snapshots);
+        }
+    }
 
-            if (yamlStorage != null) {
-                int yamlCount = 0;
-                for (PlayerData data : snapshots) {
-                    if (yamlStorage.savePlayerForEmergencyFallback(data)) {
-                        yamlCount++;
-                    }
+    private void flushToYamlFallback(Collection<PlayerData> snapshots) {
+        YamlPlayerDataStorage yamlStorage = plugin.getYamlPlayerDataStorage();
+        if (yamlStorage != null) {
+            int yamlCount = 0;
+            for (PlayerData data : snapshots) {
+                if (yamlStorage.savePlayerForEmergencyFallback(data)) {
+                    yamlCount++;
                 }
-                plugin.getLogger().info("[RankForge] Emergency shutdown save complete: " + yamlCount + "/" + snapshots.size() + " saved to YAML.");
-            } else {
-                plugin.getLogger().severe("[RankForge] CRITICAL: YamlPlayerDataStorage is uninitialized during shutdown! Data loss prevention failed.");
             }
+            plugin.getLogger().info("[RankForge] Emergency shutdown save complete: " + yamlCount + "/" + snapshots.size() + " saved to YAML.");
+        } else {
+            plugin.getLogger().severe("[RankForge] CRITICAL: YamlPlayerDataStorage is uninitialized during shutdown! Data loss prevention failed.");
         }
     }
 

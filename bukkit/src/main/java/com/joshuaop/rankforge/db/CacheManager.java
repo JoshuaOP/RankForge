@@ -89,6 +89,22 @@ public class CacheManager {
         });
     }
 
+    /**
+     * Bulk preloads records with an explicit online flag (e.g. false for offline startup hydration),
+     * preventing offline cache bloat and premature activeOnline tracking.
+     */
+    public void putAll(Map<UUID, PlayerData> map, boolean activeOnline) {
+        if (map == null || map.isEmpty()) return;
+        long exp = System.currentTimeMillis() + ttlMs;
+        map.forEach((k, v) -> {
+            if (k != null && v != null && v.isValidFor(k)) {
+                // If requested activeOnline is true, double check if they are actually online
+                boolean online = activeOnline && isPlayerOnline(k);
+                cache.put(k, new Entry(v, exp, online));
+            }
+        });
+    }
+
     public void remove(UUID id) { cache.remove(id); }
 
     /** Drop TTL to 1-minute grace period after logout. */
@@ -199,7 +215,7 @@ public class CacheManager {
         cache.forEach((uuid, current) -> {
             if (current.activeOnline() || current.expiresAt() >= now) {
                 PlayerData snapshot = stitchLiveData(current.data(), current.activeOnline());
-                put(uuid, snapshot);
+                put(uuid, snapshot, current.activeOnline());
                 snapshots.add(snapshot);
             }
         });
