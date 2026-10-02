@@ -52,8 +52,14 @@ public class SoftDependency implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerJoin(PlayerJoinEvent event) {
+        if (event == null || event.getPlayer() == null) return;
         Player player = event.getPlayer();
         UUID   uuid   = player.getUniqueId();
+        if (uuid == null) return;
+
+        if (plugin.getRankManager() == null || plugin.getRankManager().getRepository() == null) {
+            return;
+        }
 
         PlayerData data = plugin.getRankManager().getRepository().load(uuid, player.getName());
 
@@ -61,31 +67,47 @@ public class SoftDependency implements Listener {
             return; // Safety guard if loading fails entirely
         }
 
-        if (!data.playerName().equals(player.getName())) {
-            data = data.withPlayerName(player.getName());
-            plugin.getRankManager().getCacheManager().put(uuid, data);
+        String playerName = player.getName();
+        if (playerName != null && !playerName.equals(data.playerName())) {
+            data = data.withPlayerName(playerName);
+            if (plugin.getRankManager().getCacheManager() != null) {
+                plugin.getRankManager().getCacheManager().put(uuid, data);
+            }
         }
 
         if (plugin.getRankManager().getRank(data.rankId()) == null) {
             String fallback = plugin.getRankManager().getDefaultRankId();
-            data = data.withRank(fallback);
-            plugin.getRankManager().getCacheManager().put(uuid, data);
-            if (plugin.isDebug()) plugin.getLogger().info(
-                    "Repaired orphaned rank for " + player.getName() + " → '" + fallback + "'");
+            if (fallback != null) {
+                data = data.withRank(fallback);
+                if (plugin.getRankManager().getCacheManager() != null) {
+                    plugin.getRankManager().getCacheManager().put(uuid, data);
+                }
+                if (plugin.isDebug()) plugin.getLogger().info(
+                        "Repaired orphaned rank for " + player.getName() + " → '" + fallback + "'");
+            }
         }
 
-        if (plugin.getBypassRegistry() != null) {
-            plugin.getBypassRegistry().loadPersisted(uuid, data.completedRequirements());
+        if (plugin.getBypassRegistry() != null && data.completedRequirements() != null) {
+            try {
+                plugin.getBypassRegistry().loadPersisted(uuid, data.completedRequirements());
+            } catch (Exception ignored) {}
         }
 
         applyRankPermissions(player, null, data.rankId());
-        plugin.getCosmeticManager().onLogin(player, data.rankId());
+        
+        if (plugin.getCosmeticManager() != null) {
+            try {
+                plugin.getCosmeticManager().onLogin(player, data.rankId());
+            } catch (Exception ignored) {}
+        }
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerQuit(PlayerQuitEvent event) {
+        if (event == null || event.getPlayer() == null) return;
         Player player = event.getPlayer();
         UUID   uuid   = player.getUniqueId();
+        if (uuid == null) return;
 
         // Clean up fallback local permission attachments if used
         PermissionAttachment attachment = rankAttachments.remove(uuid);
@@ -95,7 +117,15 @@ public class SoftDependency implements Listener {
             } catch (Exception ignored) {}
         }
 
-        plugin.getCosmeticManager().onLogout(player);
+        if (plugin.getCosmeticManager() != null) {
+            try {
+                plugin.getCosmeticManager().onLogout(player);
+            } catch (Exception ignored) {}
+        }
+
+        if (plugin.getRankManager() == null || plugin.getRankManager().getCacheManager() == null) {
+            return;
+        }
 
         CacheManager cache = plugin.getRankManager().getCacheManager();
         if (cache.contains(uuid)) {
@@ -110,13 +140,28 @@ public class SoftDependency implements Listener {
             }
 
             final PlayerData toSave = data;
-            plugin.getTaskScheduler().async(() -> {
-                if (toSave != null && !plugin.getRankManager().getRepository().save(toSave)) {
-                    plugin.getLogger().warning("Quit save was not confirmed for " + uuid + ".");
+            if (toSave != null && plugin.getTaskScheduler() != null) {
+                try {
+                    plugin.getTaskScheduler().async(() -> {
+                        try {
+                            if (plugin.getRankManager() != null 
+                                    && plugin.getRankManager().getRepository() != null) {
+                                if (!plugin.getRankManager().getRepository().save(toSave)) {
+                                    plugin.getLogger().warning("Quit save was not confirmed for " + uuid + ".");
+                                }
+                            }
+                        } catch (Exception e) {
+                            plugin.getLogger().warning("Failed to execute async quit save for " + uuid + ": " + e.getMessage());
+                        }
+                    });
+                } catch (Exception e) {
+                    plugin.getLogger().warning("Could not schedule async quit save for " + uuid + ": " + e.getMessage());
                 }
-            });
+            }
 
-            cache.scheduleCleanup(uuid);
+            try {
+                cache.scheduleCleanup(uuid);
+            } catch (Exception ignored) {}
         }
     }
 

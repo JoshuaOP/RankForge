@@ -73,7 +73,8 @@ public class YamlPlayerDataStorage {
     private record YamlSaveSnapshot(
             String yamlContent,
             List<UUID> affectedUuids,
-            List<SaveOperation> operations
+            List<SaveOperation> operations,
+            long snapshotGeneration
     ) {
         private YamlSaveSnapshot {
             affectedUuids = List.copyOf(affectedUuids);
@@ -491,18 +492,10 @@ public class YamlPlayerDataStorage {
             Long requestedGeneration
     ) {
         SaveOperation operation = new SaveOperation();
-        YamlSaveSnapshot snapshot;
-        try {
-            snapshot = new YamlSaveSnapshot(
-                    yaml.saveToString(), affectedUuids, List.of(operation));
-        } catch (Exception e) {
-            operation.complete(false);
-            String context = affectedContext(affectedUuids);
-            logger.log(Level.WARNING, "Failed to serialize playerdata.yml" + context + ".", e);
-            return operation;
-        }
         boolean scheduleWriter = false;
         long token = 0L;
+        YamlSaveSnapshot snapshot;
+        
         synchronized (writeLock) {
             if (!acceptingWrites || writerShutdown) {
                 operation.complete(false);
@@ -511,6 +504,17 @@ public class YamlPlayerDataStorage {
             long generation = requestedGeneration == null
                     ? ++writeGeneration : requestedGeneration;
             for (UUID uuid : affectedUuids) latestPlayerWrite.put(uuid, generation);
+            
+            try {
+                snapshot = new YamlSaveSnapshot(
+                        yaml.saveToString(), affectedUuids, List.of(operation), generation);
+            } catch (Exception e) {
+                operation.complete(false);
+                String context = affectedContext(affectedUuids);
+                logger.log(Level.WARNING, "Failed to serialize playerdata.yml" + context + ".", e);
+                return operation;
+            }
+
             pendingSnapshot = mergeSnapshots(pendingSnapshot, snapshot);
             clearCancelledWriterLocked();
             if (!asyncWriteScheduled) {
@@ -581,6 +585,20 @@ public class YamlPlayerDataStorage {
                         writeLock.notifyAll();
                         return;
                     }
+
+                    // Prevent stale async snapshots from overwriting newer emergency/direct writes
+                    boolean stale = false;
+                    for (UUID uuid : snapshot.affectedUuids()) {
+                        if (latestPlayerWrite.getOrDefault(uuid, 0L) > snapshot.snapshotGeneration()) {
+                            stale = true;
+                            break;
+                        }
+                    }
+                    if (stale) {
+                        completeOperations(snapshot, true);
+                        continue;
+                    }
+
                     inFlightSnapshot = snapshot;
                 }
                 boolean succeeded = true;
@@ -683,7 +701,8 @@ public class YamlPlayerDataStorage {
         return new YamlSaveSnapshot(
                 newer.yamlContent(),
                 mergeUuids(older.affectedUuids(), newer.affectedUuids()),
-                mergeOperations(older.operations(), newer.operations())
+                mergeOperations(older.operations(), newer.operations()),
+                Math.max(older.snapshotGeneration(), newer.snapshotGeneration())
         );
     }
 
@@ -695,7 +714,8 @@ public class YamlPlayerDataStorage {
         return new YamlSaveSnapshot(
                 newer.yamlContent(),
                 mergeUuids(failed.affectedUuids(), newer.affectedUuids()),
-                mergeOperations(failed.operations(), newer.operations())
+                mergeOperations(failed.operations(), newer.operations()),
+                Math.max(failed.snapshotGeneration(), newer.snapshotGeneration())
         );
     }
 
@@ -735,6 +755,23 @@ public class YamlPlayerDataStorage {
             snapshot = pendingSnapshot;
             if (snapshot == null) return true;
             pendingSnapshot = null;
+
+            // Check if this pending snapshot is stale before writing synchronously
+            boolean stale = false;
+            for (UUID uuid : snapshot.affectedUuids()) {
+                if (latestPlayerWrite.getOrDefault(uuid, 0L) > snapshot.snapshotGeneration()) {
+                    stale = true;
+                    break;
+                }
+            }
+            if (stale) {
+                completeOperations(snapshot, true);
+                asyncWriteScheduled = false;
+                asyncWriterTask = null;
+                writeLock.notifyAll();
+                return true;
+            }
+
             inFlightSnapshot = snapshot;
             asyncWriteScheduled = true;
         }
@@ -767,6 +804,8 @@ public class YamlPlayerDataStorage {
                 boolean succeeded = writeSnapshot(emergencyContent, List.of(liveData.uuid()));
                 if (succeeded) {
                     yaml = emergency; // Keep memory state synced
+                    writeGeneration = Math.max(writeGeneration, requestGeneration);
+                    latestPlayerWrite.put(liveData.uuid(), requestGeneration);
                 }
                 return succeeded;
             } catch (Exception e) {

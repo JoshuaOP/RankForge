@@ -44,9 +44,6 @@ public class TaskScheduler {
     public void delayed(Runnable action, long delayTicks) {
         if (action == null) return;
         final int id = idGen.incrementAndGet();
-        
-        // Reserve the ID slot first to prevent execution-before-registration race conditions
-        tasks.put(id, null);
 
         BukkitTask task = new BukkitRunnable() {
             @Override 
@@ -59,10 +56,7 @@ public class TaskScheduler {
             }
         }.runTaskLater(plugin, delayTicks);
         
-        // If the task was cancelled or completed instantly, clean up; otherwise update reference
-        if (task.isCancelled()) {
-            tasks.remove(id);
-        } else {
+        if (task != null && !task.isCancelled()) {
             tasks.put(id, task);
         }
     }
@@ -71,9 +65,6 @@ public class TaskScheduler {
     public void async(Runnable action) {
         if (action == null) return;
         final int id = idGen.incrementAndGet();
-        
-        // Reserve the ID slot first to prevent instant async execution race conditions
-        tasks.put(id, null);
 
         BukkitTask task = new BukkitRunnable() {
             @Override
@@ -86,9 +77,7 @@ public class TaskScheduler {
             }
         }.runTaskAsynchronously(plugin);
         
-        if (task.isCancelled()) {
-            tasks.remove(id);
-        } else {
+        if (task != null && !task.isCancelled()) {
             tasks.put(id, task);
         }
     }
@@ -115,7 +104,9 @@ public class TaskScheduler {
 
     private int register(BukkitTask task) {
         int id = idGen.incrementAndGet();
-        tasks.put(id, task);
+        if (task != null) {
+            tasks.put(id, task);
+        }
         return id;
     }
 }
