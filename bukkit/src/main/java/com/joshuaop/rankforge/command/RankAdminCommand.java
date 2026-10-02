@@ -329,10 +329,10 @@ public class RankAdminCommand {
 
         Player online = Bukkit.getPlayer(targetName);
         if (online != null) {
-            boolean ok = plugin.getApi().setRank(online, rankId, s);
+            boolean ok = plugin.getApi().setRank(online, rankId, s).join();
             s.sendMessage(ok
                     ? "§a✔ Rank set to §e" + rankId + " §afor §e" + online.getName() + "§a."
-                    : "§c✘ Rank change was cancelled by an event listener.");
+                    : "§c✘ Rank change was cancelled by an event listener or failed.");
             return;
         }
 
@@ -356,7 +356,7 @@ public class RankAdminCommand {
 
         Player online = Bukkit.getPlayer(targetName);
         if (online != null) {
-            plugin.getApi().resetRank(online, s);
+            plugin.getApi().resetRank(online, s).join();
             s.sendMessage("§a✔ Reset §e" + online.getName() + "§a's rank to default.");
             return;
         }
@@ -393,7 +393,7 @@ public class RankAdminCommand {
 
         Player online = Bukkit.getPlayer(targetName);
         if (online != null) {
-            boolean ok = plugin.getApi().setRank(online, rankId, s);
+            boolean ok = plugin.getApi().setRank(online, rankId, s).join();
             s.sendMessage(ok
                     ? "§a✔ Force-set §e" + online.getName() + "§a's rank to §e" + rankId + "§a."
                     : "§c✘ Rank change could not be completed.");
@@ -545,11 +545,13 @@ public class RankAdminCommand {
                         PlayerData latest = plugin.getRankManager().getCacheManager()
                                 .getRaw(finalUuid);
                         if (latest != null && latest.rankId().equals(finalRank)) {
-                            if (!plugin.getSoftDependency().applyRankPermissions(
-                                    nowOnline, null, finalRank)) {
-                                plugin.getLogger().warning("Could not synchronize permissions "
-                                        + "after offline rank change for " + finalUuid + ".");
-                            }
+                            plugin.getSoftDependency().applyRankPermissions(
+                                    nowOnline, null, finalRank).whenComplete((success, err) -> {
+                                if (err != null || !success) {
+                                    plugin.getLogger().warning("Could not synchronize permissions "
+                                            + "after offline rank change for " + finalUuid + ".");
+                                }
+                            });
                             nowOnline.sendMessage("§6[RankForge] §7An admin has "
                                     + finalCTLabel + " your rank to §e" + finalRank + "§7.");
                         }

@@ -13,6 +13,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import org.bukkit.permissions.PermissionAttachment;
@@ -184,33 +185,33 @@ public class SoftDependency implements Listener {
         }
     }
 
-    public void applyRankPermissions(Player player, String rankId) {
-        applyRankPermissions(player, null, rankId);
+    public CompletableFuture<Boolean> applyRankPermissions(Player player, String rankId) {
+        return applyRankPermissions(player, null, rankId);
     }
 
-    public boolean applyRankPermissions(Player player, String oldRankId, String rankId) {
-        if (player == null || !player.isOnline()) return false;
+    public CompletableFuture<Boolean> applyRankPermissions(Player player, String oldRankId, String rankId) {
+        if (player == null || !player.isOnline()) return CompletableFuture.completedFuture(false);
         RankModel model = plugin.getRankManager().getRank(rankId);
 
         if (luckPermsHook != null) {
             try {
-                // Non-blocking async application with callback handling to prevent main thread freezing
                 var operation = luckPermsHook.applyPermissions(player, model);
-                if (operation == null) return false;
+                if (operation == null) return CompletableFuture.completedFuture(false);
                 
-                operation.whenComplete((result, error) -> {
+                return operation.handle((result, error) -> {
                     if (error != null) {
                         plugin.getLogger().log(Level.WARNING,
                                 "LuckPerms rank permission update failed asynchronously for "
                                         + player.getUniqueId(), error);
+                        return false;
                     }
+                    return true;
                 });
-                return true;
             } catch (RuntimeException e) {
                 plugin.getLogger().log(Level.WARNING,
                         "Could not apply RankForge LuckPerms permissions for "
                                 + player.getName(), e);
-                return false;
+                return CompletableFuture.completedFuture(false);
             }
         } else {
             // Fallback native PermissionAttachments
@@ -230,11 +231,11 @@ public class SoftDependency implements Listener {
                         previous.remove();
                     } catch (Exception ignored) {}
                 }
-                return true;
+                return CompletableFuture.completedFuture(true);
             } catch (RuntimeException e) {
                 plugin.getLogger().log(Level.WARNING,
                         "Could not apply native RankForge permissions for " + player.getName(), e);
-                return false;
+                return CompletableFuture.completedFuture(false);
             }
         }
     }

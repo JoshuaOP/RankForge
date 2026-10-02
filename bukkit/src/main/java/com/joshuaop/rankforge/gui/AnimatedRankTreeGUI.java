@@ -210,12 +210,13 @@ public class AnimatedRankTreeGUI {
         String nextId = plugin.getRankManager().getNextRankId(getCurrentRankId(player));
         for (RankModel rank : plugin.getRankManager().getModelList()) {
             if (rank.getSlot() == rawSlot && rank.getId().equals(nextId)) {
-                boolean success = plugin.getApi().rankUp(player);
-                if (success) {
-                    Bukkit.getScheduler().runTaskLater(plugin, () -> {
-                        if (player.isOnline()) open(player);
-                    }, 1L);
-                }
+                plugin.getApi().rankUp(player).thenAccept(success -> {
+                    if (success != null && success) {
+                        Bukkit.getScheduler().runTask(plugin, () -> {
+                            if (player.isOnline()) open(player);
+                        });
+                    }
+                });
                 return;
             }
         }

@@ -10,6 +10,8 @@ import com.joshuaop.rankforge.experience.RankHistoryManager;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 
+import java.util.concurrent.CompletableFuture;
+
 /**
  * Public API for external plugins to interact with RankForge.
  *
@@ -18,9 +20,9 @@ import org.bukkit.entity.Player;
  * RankForgeAPI api = RankForgeAPI.getInstance();
  * if (api == null) return;
  *
- * api.rankUp(player);
- * api.setRank(player, "VIP");
- * api.resetRank(player);
+ * api.rankUp(player).thenAccept(success -> { ... });
+ * api.setRank(player, "VIP").thenAccept(success -> { ... });
+ * api.resetRank(player).thenAccept(success -> { ... });
  * PlayerRank rank = api.getPlayerRank(player);
  * }</pre>
  */
@@ -44,24 +46,32 @@ public class RankForgeAPI {
         return rankService.getPlayerRank(player);
     }
 
-    public boolean rankUp(Player player) {
-        return rankService.rankUp(player);
+    public CompletableFuture<Boolean> rankUp(Player player) {
+        boolean success = rankService.rankUp(player);
+        return CompletableFuture.completedFuture(success);
     }
 
-    public boolean setRank(Player player, String rankId) {
-        return rankService.setRank(player, rankId);
+    public CompletableFuture<Boolean> setRank(Player player, String rankId) {
+        boolean success = rankService.setRank(player, rankId);
+        return CompletableFuture.completedFuture(success);
     }
 
-    public boolean setRank(Player player, String rankId, CommandSender setter) {
-        return rankService.setRank(player, rankId, setter);
+    public CompletableFuture<Boolean> setRank(Player player, String rankId, CommandSender setter) {
+        CompletableFuture<Boolean> future = rankService.setRank(player, rankId, setter);
+        return future != null ? future : CompletableFuture.completedFuture(false);
     }
 
-    public void resetRank(Player player) {
+    public CompletableFuture<Boolean> resetRank(Player player) {
         rankService.resetRank(player);
+        return CompletableFuture.completedFuture(true);
     }
 
-    public void resetRank(Player player, CommandSender setter) {
-        rankService.resetRank(player, setter);
+    public CompletableFuture<Boolean> resetRank(Player player, CommandSender setter) {
+        CompletableFuture<Void> future = rankService.resetRank(player, setter);
+        if (future == null) {
+            return CompletableFuture.completedFuture(true);
+        }
+        return future.thenApply(v -> true).exceptionally(ex -> false);
     }
 
     public double getProgress(Player player) {
