@@ -15,7 +15,7 @@
 #     mob-kills    — Total mob kills (vanilla stat)   (e.g. 50)
 #     block-breaks      — Total blocks broken (RankForge tracker, not vanilla stat)(e.g. 500)
 #     statistic-id      — Untyped Bukkit Statistic name    (e.g. JUMP, DEATHS)
-#     statistic-value   — Required value for statistic-id  (e.g. 100)
+#     statistic-value   — Required minimum value for statistic-id (e.g. 100)
 #     quests            — List of quest IDs (checked via permission node:
 #                         rankforge.quest.completed.<questId>)
 #     worlds            — Player must be in one of these worlds when ranking up
@@ -86,7 +86,7 @@ ranks:
       - "  §8• §7Mob Kills: §c100"
       - "  §8• §7Block Breaks: §92,000"
       - "  §8• §7Quests: §dIntro Quest"
-      - "  §8• §7Statistic: §6100 Jumps"
+      - "  §8• §7Statistic: §6At least 100 Jumps"
     permissions:
       - "minecraft.command.gamemode"
       - "worldedit.generation.sphere"
@@ -154,7 +154,7 @@ ranks:
       - "  §8• §7Block Breaks: §950,000"
       - "  §8• §7Required Items: §b1x Nether Star"
       - "  §8• §7Quests: §dIntro, Explore & Master Quests"
-      - "  §8• §7Statistic: §4Fewer than 100 Deaths"
+      - "  §8• §7Statistic: §4At least 100 Deaths"
       - "  §8• §7Location: §aOverworld, Nether, or End"
     permissions:
       - "essentials.fly"

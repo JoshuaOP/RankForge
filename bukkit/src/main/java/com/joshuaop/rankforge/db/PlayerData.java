@@ -14,7 +14,7 @@ import java.util.UUID;
  *   playerName       — last-known display name (cosmetic only; UUID is authoritative)
  *   rankId           — current rank ID as defined in ranks.yml
  *   experience       — total RankForge XP earned
- *   money            — cached Vault balance (refreshed at sync time)
+ *   money            — cached Vault balance (refreshed at sync time; supports negative balances/debt)
  *   language         — per-player language code (e.g. "en", "de")
  *   blockBreaks      — cumulative blocks broken tracked by BlockBreakTracker;
  *                      replaces vanilla MINE_BLOCK stat approximation entirely
@@ -57,7 +57,7 @@ public record PlayerData(
                 && playerName != null && !playerName.isBlank()
                 && rankId != null && !rankId.isBlank()
                 && language != null && !language.isBlank()
-                && Double.isFinite(money) && money >= 0.0
+                && Double.isFinite(money) // Allows negative balances (debt/overdrafts) while guarding against NaN/Infinity
                 && experience >= 0L
                 && blockBreaks >= 0L
                 && playTime >= 0L

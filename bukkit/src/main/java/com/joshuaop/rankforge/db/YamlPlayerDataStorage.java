@@ -50,10 +50,10 @@ public class YamlPlayerDataStorage {
     private YamlConfiguration     yaml;
     private final Object          writeLock = new Object();
     private final Object          fileWriteLock = new Object();
-    private final Map<UUID, Long>  latestPlayerWrite = new HashMap<>();
+    private final Map<UUID, Long> latestPlayerWrite = new HashMap<>();
     private YamlSaveSnapshot      pendingSnapshot;
     private YamlSaveSnapshot      inFlightSnapshot;
-    private BukkitTask             asyncWriterTask;
+    private BukkitTask            asyncWriterTask;
     private long                  writeGeneration;
     private long                  writerToken;
     private int                   consecutiveWriteFailures;
@@ -207,9 +207,7 @@ public class YamlPlayerDataStorage {
         }
     }
 
-    /**
-     * v3 → v4: add playtime-minutes field defaulting to 0 for all existing entries.
-     */
+    /** v3 → v4: add playtime-minutes field defaulting to 0 for all existing entries. */
     private void migrateV3ToV4(YamlConfiguration target) {
         ConfigurationSection players = target.getConfigurationSection("players");
         if (players == null) return;
@@ -221,10 +219,7 @@ public class YamlPlayerDataStorage {
         }
     }
 
-    /**
-     * v4 → v5: add completed-requirements field defaulting to an empty list for all
-     * existing entries.
-     */
+    /** v4 → v5: add completed-requirements field defaulting to an empty list for all existing entries. */
     private void migrateV4ToV5(YamlConfiguration target) {
         ConfigurationSection players = target.getConfigurationSection("players");
         if (players == null) return;
@@ -281,7 +276,6 @@ public class YamlPlayerDataStorage {
             requestGeneration = ++writeGeneration;
         }
         
-        // If we are already on the main thread, execute direct write safely to bypass queue congestion locks during quit events
         if (Bukkit.isPrimaryThread()) {
             return saveEmergencyPlayerDirect(data, requestGeneration);
         }
@@ -587,7 +581,6 @@ public class YamlPlayerDataStorage {
                         return;
                     }
 
-                    // Prevent stale async snapshots from overwriting newer emergency/direct writes
                     boolean stale = false;
                     for (UUID uuid : snapshot.affectedUuids()) {
                         if (latestPlayerWrite.getOrDefault(uuid, 0L) > snapshot.snapshotGeneration()) {
@@ -660,37 +653,37 @@ public class YamlPlayerDataStorage {
     private boolean writeSnapshot(String content, List<UUID> affectedUuids, long generation) {
         Path target = dataFile.toPath();
         Path temporary = null;
-        synchronized (fileWriteLock) {
-            // Guard against racing with a newer generation write that already flushed to disk
+
+        synchronized (writeLock) {
             if (affectedUuids != null) {
-                synchronized (writeLock) {
-                    for (UUID uuid : affectedUuids) {
-                        if (latestPlayerWrite.getOrDefault(uuid, 0L) > generation) {
-                            return true; // A newer write already completed or surpassed this
-                        }
+                for (UUID uuid : affectedUuids) {
+                    if (latestPlayerWrite.getOrDefault(uuid, 0L) > generation) {
+                        return true;
                     }
                 }
             }
 
-            try {
-                temporary = Files.createTempFile(target.getParent(), "playerdata-", ".tmp");
-                Files.writeString(temporary, content, StandardCharsets.UTF_8);
+            synchronized (fileWriteLock) {
                 try {
-                    Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING,
-                            StandardCopyOption.ATOMIC_MOVE);
-                } catch (AtomicMoveNotSupportedException e) {
-                    Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
-                }
-                return true;
-            } catch (Exception e) {
-                logger.log(Level.WARNING, "Failed to save playerdata.yml"
-                        + affectedContext(affectedUuids) + ".", e);
-                return false;
-            } finally {
-                if (temporary != null) {
+                    temporary = Files.createTempFile(target.getParent(), "playerdata-", ".tmp");
+                    Files.writeString(temporary, content, StandardCharsets.UTF_8);
                     try {
-                        Files.deleteIfExists(temporary);
-                    } catch (Exception ignored) {}
+                        Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING,
+                                StandardCopyOption.ATOMIC_MOVE);
+                    } catch (AtomicMoveNotSupportedException e) {
+                        Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+                    }
+                    return true;
+                } catch (Exception e) {
+                    logger.log(Level.WARNING, "Failed to save playerdata.yml"
+                            + affectedContext(affectedUuids) + ".", e);
+                    return false;
+                } finally {
+                    if (temporary != null) {
+                        try {
+                            Files.deleteIfExists(temporary);
+                        } catch (Exception ignored) {}
+                    }
                 }
             }
         }
@@ -768,7 +761,6 @@ public class YamlPlayerDataStorage {
             if (snapshot == null) return true;
             pendingSnapshot = null;
 
-            // Check if this pending snapshot is stale before writing synchronously
             boolean stale = false;
             for (UUID uuid : snapshot.affectedUuids()) {
                 if (latestPlayerWrite.getOrDefault(uuid, 0L) > snapshot.snapshotGeneration()) {
@@ -802,14 +794,12 @@ public class YamlPlayerDataStorage {
 
     private boolean saveEmergencyPlayerDirect(PlayerData data, long requestGeneration) {
         synchronized (writeLock) {
-            // Reject this write if a newer generation has already been saved for this player
             if (latestPlayerWrite.getOrDefault(data.uuid(), Long.MIN_VALUE) > requestGeneration) {
                 return false;
             }
 
             PlayerData liveData = stitchRuntimeData(data);
 
-            // Re-check after stitching runtime data just in case state changed during collection
             if (latestPlayerWrite.getOrDefault(liveData.uuid(), Long.MIN_VALUE) > requestGeneration) {
                 return false;
             }
@@ -825,10 +815,9 @@ public class YamlPlayerDataStorage {
                 write(emergency, liveData);
                 String emergencyContent = emergency.saveToString();
                 
-                // Directly commit via file write lock without waiting for async thread pool locks during exit
                 boolean succeeded = writeSnapshot(emergencyContent, List.of(liveData.uuid()), requestGeneration);
                 if (succeeded) {
-                    yaml = emergency; // Keep memory state synced
+                    yaml = emergency;
                     writeGeneration = Math.max(writeGeneration, requestGeneration);
                 }
                 return succeeded;

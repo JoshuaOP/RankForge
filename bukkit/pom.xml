@@ -126,7 +126,7 @@
                             <createDependencyReducedPom>false</createDependencyReducedPom>
                             <!-- Note: ensure minimizeJar is set up properly. If bStats gets stripped by it, -->
                             <!-- you may need an explicit include filter, but typically shade handles relocations cleanly. -->
-                            <minimizeJar>true</minimizeJar>
+                            <minimizeJar>false</minimizeJar>
                             <filters>
                                 <filter>
                                     <artifact>*:*</artifact>
