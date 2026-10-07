@@ -76,12 +76,12 @@ public class RankService {
         if (event.isCancelled()) return CompletableFuture.completedFuture(false);
 
         return applyRank(player, event.getNewRankId(), RankHistoryEntry.ChangeType.SET)
-                .thenApply(success -> {
+                .thenApplyAsync(success -> {
                     if (success) {
                         plugin.getHookRegistry().fireRankSet(player, oldRankId, rankId);
                     }
                     return success;
-                });
+                }, mainThreadExecutor);
     }
 
     public void resetRank(Player player) {
@@ -97,11 +97,11 @@ public class RankService {
         if (event.isCancelled()) return CompletableFuture.completedFuture(null);
 
         return applyRank(player, event.getDefaultRankId(), RankHistoryEntry.ChangeType.RESET)
-                .thenAccept(success -> {
+                .thenAcceptAsync(success -> {
                     if (success) {
                         plugin.getHookRegistry().fireRankReset(player, oldRankId);
                     }
-                });
+                }, mainThreadExecutor);
     }
 
     public PlayerRank getPlayerRank(Player player) {
@@ -164,100 +164,121 @@ public class RankService {
         }
         final int oldRequiredStatistic = tempReqStat;
 
+        // STEP 1: Async Permission/API Handshake
         return plugin.getSoftDependency().applyRankPermissions(player, oldRankId, resolvedId)
-                .thenApplyAsync(success -> {
-                    if (!success || !player.isOnline()) {
-                        plugin.getLangManager().send(player, "rankup_fail");
-                        return false;
-                    }
+                .thenCompose(success -> {
+                    CompletableFuture<Boolean> mainThreadFuture = new CompletableFuture<>();
+                    
+                    // STEP 2: Trampoline back to Main Thread for Live Player/Cache Mutations
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        try {
+                            if (!success || !player.isOnline()) {
+                                plugin.getLangManager().send(player, "rankup_fail");
+                                mainThreadFuture.complete(false);
+                                return;
+                            }
 
-                    double cost = nextModel.getRequiredMoney();
-                    final boolean charged;
-                    if (cost > 0) {
-                        boolean withdrawResult = plugin.getRequirementManager().withdrawMoney(player, cost);
-                        if (!withdrawResult) {
-                            restorePermissions(player, oldRankId);
-                            plugin.getLogger().warning("Rank-up payment was not confirmed for "
-                                    + player.getUniqueId() + "; rank-up aborted.");
-                            plugin.getLangManager().send(player, "rankup_fail");
-                            return false;
-                        }
-                        charged = true;
-                        PlayerData chargedData = plugin.getRankManager().getCacheManager()
-                                .getRaw(player.getUniqueId());
-                        if (chargedData != null) {
-                            plugin.getRankManager().getCacheManager().put(player.getUniqueId(),
-                                    chargedData.withMoney(plugin.getSoftDependency().getBalance(player)));
-                        }
-                    } else {
-                        charged = false;
-                    }
+                            double cost = nextModel.getRequiredMoney();
+                            final boolean charged;
+                            if (cost > 0) {
+                                boolean withdrawResult = plugin.getRequirementManager().withdrawMoney(player, cost);
+                                if (!withdrawResult) {
+                                    restorePermissions(player, oldRankId);
+                                    plugin.getLogger().warning("Rank-up payment was not confirmed for "
+                                            + player.getUniqueId() + "; rank-up aborted.");
+                                    plugin.getLangManager().send(player, "rankup_fail");
+                                    mainThreadFuture.complete(false);
+                                    return;
+                                }
+                                charged = true;
+                                PlayerData chargedData = plugin.getRankManager().getCacheManager()
+                                        .getRaw(player.getUniqueId());
+                                if (chargedData != null) {
+                                    plugin.getRankManager().getCacheManager().put(player.getUniqueId(),
+                                            chargedData.withMoney(plugin.getSoftDependency().getBalance(player)));
+                                }
+                            } else {
+                                charged = false;
+                            }
 
-                    try {
-                        PlayerData currentRankData = plugin.getRankManager().getCacheManager()
-                                .getRaw(player.getUniqueId());
-                        if (currentRankData == null) currentRankData = data;
-                        plugin.getRankManager().getCacheManager().put(
-                                player.getUniqueId(), currentRankData.withRank(resolvedId));
-                        
-                        if (plugin.getExperienceManager() != null) {
-                            plugin.getExperienceManager().deductRankup(player, resolvedId);
-                        }
-                        resetTrackedProgress(player, nextModel);
+                            try {
+                                PlayerData currentRankData = plugin.getRankManager().getCacheManager()
+                                        .getRaw(player.getUniqueId());
+                                if (currentRankData == null) currentRankData = data;
+                                plugin.getRankManager().getCacheManager().put(
+                                        player.getUniqueId(), currentRankData.withRank(resolvedId));
+                                
+                                if (plugin.getExperienceManager() != null) {
+                                    plugin.getExperienceManager().deductRankup(player, resolvedId);
+                                }
+                                resetTrackedProgress(player, nextModel);
 
-                        PlayerData afterRank = plugin.getRankManager().getCacheManager()
-                                .getRaw(player.getUniqueId());
-                        if (afterRank != null && !afterRank.completedRequirements().isEmpty()) {
-                            plugin.getRankManager().getCacheManager().put(player.getUniqueId(),
-                                    afterRank.withCompletedRequirements(Set.of()));
-                        }
+                                PlayerData afterRank = plugin.getRankManager().getCacheManager()
+                                        .getRaw(player.getUniqueId());
+                                if (afterRank != null && !afterRank.completedRequirements().isEmpty()) {
+                                    plugin.getRankManager().getCacheManager().put(player.getUniqueId(),
+                                            afterRank.withCompletedRequirements(Set.of()));
+                                }
+                            } catch (RuntimeException e) {
+                                plugin.getLogger().log(Level.WARNING,
+                                        "Rank-up state preparation failed for " + player.getUniqueId() + ".", e);
+                                if (charged && !plugin.getSoftDependency().refund(player, cost)) {
+                                    plugin.getLogger().severe("Could not refund " + cost + " to "
+                                            + player.getUniqueId() + " after rank-up failure.");
+                                }
+                                restoreRankUpState(player, data, oldLevel, oldExp, oldContents,
+                                        oldArmor, oldOffhand, oldMobKills, requiredStatisticId,
+                                        oldRequiredStatistic);
+                                restorePermissions(player, oldRankId);
+                                plugin.getLangManager().send(player, "rankup_fail");
+                                mainThreadFuture.complete(false);
+                                return;
+                            }
 
+                            if (plugin.getBypassRegistry() != null) {
+                                plugin.getBypassRegistry().clearAll(player.getUniqueId());
+                            }
+
+                            String display = plugin.getRankManager().getDisplayName(resolvedId);
+                            plugin.getSoundManager().playRankup(player);
+                            plugin.getAnnouncementManager().sendRankup(player, display);
+                            plugin.getCosmeticManager().onRankup(player, resolvedId, display);
+                            executeRankCommands(player, resolvedId);
+                            
+                            if (plugin.getHistoryManager() != null) {
+                                plugin.getHistoryManager().record(new RankHistoryEntry(
+                                        player.getUniqueId(), player.getName(), oldRankId, resolvedId,
+                                        RankHistoryEntry.ChangeType.RANKUP, System.currentTimeMillis()));
+                            }
+                            plugin.getHookRegistry().fireRankup(player, oldRankId, resolvedId);
+                            mainThreadFuture.complete(true);
+                        } catch (Throwable t) {
+                            mainThreadFuture.completeExceptionally(t);
+                        }
+                    });
+
+                    // STEP 3: Async Persistence (Offloading database I/O)
+                    return mainThreadFuture.thenCompose(res -> {
+                        if (!res) return CompletableFuture.completedFuture(false);
                         PlayerData finalData = plugin.getRankManager().getCacheManager()
                                 .getRaw(player.getUniqueId());
-                        
-                        if (finalData != null) {
-                            boolean saved = plugin.getRankManager().getRepository().save(finalData);
-                            if (!saved) {
-                                if (plugin.getYamlPlayerDataStorage() != null) {
-                                    plugin.getYamlPlayerDataStorage().savePlayerForEmergencyFallback(finalData);
-                                } else if (plugin.isDebug()) {
-                                    plugin.getLogger().warning("Rank-up persistence failed for " + player.getUniqueId());
-                                }
-                            }
-                        }
-                    } catch (RuntimeException e) {
-                        plugin.getLogger().log(Level.WARNING,
-                                "Rank-up state preparation failed for " + player.getUniqueId() + ".", e);
-                        if (charged && !plugin.getSoftDependency().refund(player, cost)) {
-                            plugin.getLogger().severe("Could not refund " + cost + " to "
-                                    + player.getUniqueId() + " after rank-up failure.");
-                        }
-                        restoreRankUpState(player, data, oldLevel, oldExp, oldContents,
-                                oldArmor, oldOffhand, oldMobKills, requiredStatisticId,
-                                oldRequiredStatistic);
-                        restorePermissions(player, oldRankId);
-                        plugin.getLangManager().send(player, "rankup_fail");
-                        return false;
-                    }
+                        if (finalData == null) return CompletableFuture.completedFuture(true);
 
-                    if (plugin.getBypassRegistry() != null) {
-                        plugin.getBypassRegistry().clearAll(player.getUniqueId());
-                    }
-
-                    String display = plugin.getRankManager().getDisplayName(resolvedId);
-                    plugin.getSoundManager().playRankup(player);
-                    plugin.getAnnouncementManager().sendRankup(player, display);
-                    plugin.getCosmeticManager().onRankup(player, resolvedId, display);
-                    executeRankCommands(player, resolvedId);
-                    
-                    if (plugin.getHistoryManager() != null) {
-                        plugin.getHistoryManager().record(new RankHistoryEntry(
-                                player.getUniqueId(), player.getName(), oldRankId, resolvedId,
-                                RankHistoryEntry.ChangeType.RANKUP, System.currentTimeMillis()));
-                    }
-                    plugin.getHookRegistry().fireRankup(player, oldRankId, resolvedId);
-                    return true;
-                }, mainThreadExecutor);
+                        return CompletableFuture.supplyAsync(() -> plugin.getRankManager().getRepository().save(finalData))
+                                .handle((saved, throwable) -> {
+                                    if (throwable != null || !saved) {
+                                        Bukkit.getScheduler().runTask(plugin, () -> {
+                                            if (plugin.getYamlPlayerDataStorage() != null) {
+                                                plugin.getYamlPlayerDataStorage().savePlayerForEmergencyFallback(finalData);
+                                            } else if (plugin.isDebug()) {
+                                                plugin.getLogger().warning("Rank-up persistence failed for " + player.getUniqueId());
+                                            }
+                                        });
+                                    }
+                                    return true;
+                                });
+                    });
+                });
     }
 
     private void resetTrackedProgress(Player player, RankModel achieved) {
@@ -384,39 +405,61 @@ public class RankService {
         PlayerData oldData = loadData(player);
         String     oldRank = oldData.rankId();
 
+        // STEP 1: Async Permission/API Handshake
         return plugin.getSoftDependency().applyRankPermissions(player, oldRank, newRankId)
-                .thenApplyAsync(success -> {
-                    if (!success || !player.isOnline()) {
-                        plugin.getLogger().warning("RankForge permission update was not accepted for "
-                                + player.getUniqueId() + ".");
-                        return false;
-                    }
-
-                    PlayerData updated = oldData.withRank(newRankId);
-                    plugin.getRankManager().getCacheManager().put(player.getUniqueId(), updated);
+                .thenCompose(success -> {
+                    CompletableFuture<Boolean> mainThreadFuture = new CompletableFuture<>();
                     
-                    boolean saved = plugin.getRankManager().getRepository().save(updated);
-                    if (!saved) {
-                        if (plugin.getYamlPlayerDataStorage() != null) {
-                            plugin.getYamlPlayerDataStorage().savePlayerForEmergencyFallback(updated);
-                        } else {
-                            plugin.getLogger().warning("Async rank persistence failed for " + player.getUniqueId() + "; data retained in cache/YAML fallback.");
+                    // STEP 2: Trampoline back to Main Thread for Live Player/Cache Mutations
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        try {
+                            if (!success || !player.isOnline()) {
+                                plugin.getLogger().warning("RankForge permission update was not accepted for "
+                                        + player.getUniqueId() + ".");
+                                mainThreadFuture.complete(false);
+                                return;
+                            }
+
+                            PlayerData updated = oldData.withRank(newRankId);
+                            plugin.getRankManager().getCacheManager().put(player.getUniqueId(), updated);
+
+                            String display = plugin.getRankManager().getDisplayName(newRankId);
+                            plugin.getSoundManager().playRankup(player);
+                            plugin.getAnnouncementManager().sendRankup(player, display);
+                            plugin.getCosmeticManager().onRankup(player, newRankId, display);
+                            executeRankCommands(player, newRankId);
+
+                            if (plugin.getHistoryManager() != null) {
+                                plugin.getHistoryManager().record(new RankHistoryEntry(
+                                        player.getUniqueId(), player.getName(),
+                                        oldRank, newRankId, changeType, System.currentTimeMillis()));
+                            }
+                            mainThreadFuture.complete(true);
+                        } catch (Throwable t) {
+                            mainThreadFuture.completeExceptionally(t);
                         }
-                    }
+                    });
 
-                    String display = plugin.getRankManager().getDisplayName(newRankId);
-                    plugin.getSoundManager().playRankup(player);
-                    plugin.getAnnouncementManager().sendRankup(player, display);
-                    plugin.getCosmeticManager().onRankup(player, newRankId, display);
-                    executeRankCommands(player, newRankId);
+                    // STEP 3: Async Persistence (Offloading database I/O)
+                    return mainThreadFuture.thenCompose(res -> {
+                        if (!res) return CompletableFuture.completedFuture(false);
+                        PlayerData updated = oldData.withRank(newRankId);
 
-                    if (plugin.getHistoryManager() != null) {
-                        plugin.getHistoryManager().record(new RankHistoryEntry(
-                                player.getUniqueId(), player.getName(),
-                                oldRank, newRankId, changeType, System.currentTimeMillis()));
-                    }
-                    return true;
-                }, mainThreadExecutor);
+                        return CompletableFuture.supplyAsync(() -> plugin.getRankManager().getRepository().save(updated))
+                                .handle((saved, throwable) -> {
+                                    if (throwable != null || !saved) {
+                                        Bukkit.getScheduler().runTask(plugin, () -> {
+                                            if (plugin.getYamlPlayerDataStorage() != null) {
+                                                plugin.getYamlPlayerDataStorage().savePlayerForEmergencyFallback(updated);
+                                            } else {
+                                                plugin.getLogger().warning("Async rank persistence failed for " + player.getUniqueId() + "; data retained in cache/YAML fallback.");
+                                            }
+                                        });
+                                    }
+                                    return true;
+                                });
+                    });
+                });
     }
 
     private void executeRankCommands(Player player, String rankId) {

@@ -7,15 +7,19 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Level;
 
 /**
- * Persists and retrieves per-player rank history.
+ * Persists and retrieves per-player rank history asynchronously.
  *
  * Storage: {@code plugins/RankForge/data/rank-history.yml}
  *
  * Guarantees:
- * - Thread-safe writes via a per-instance ReentrantLock.
+ * - Thread-safe writes via a per-instance ReentrantLock and sequential background worker.
  * - Duplicate entries (same from/to/type within a configurable dedup window) are rejected.
  * - Corrupted, null, or partially-written map entries are silently skipped.
  * - Max-entry cap is enforced on every write; oldest entries are removed first.
@@ -30,6 +34,9 @@ public class RankHistoryManager {
     private final RankForge    plugin;
     private final File         dataFile;
     private final ReentrantLock lock = new ReentrantLock();
+    
+    // Dedicated asynchronous worker thread to prevent main-thread disk I/O and TPS spikes during rank-ups
+    private final ExecutorService historyExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "RankForge-AsyncHistory-Worker"));
     
     // Memory cache to prevent continuous physical disk reading over identical game ticks
     private YamlConfiguration  cachedYaml;
@@ -71,7 +78,6 @@ public class RankHistoryManager {
         }
     }
 
-    /** BUG FIX: Added lock guard to prevent ConcurrentModificationExceptions during async reads */
     private void saveConfig() {
         lock.lock();
         try {
@@ -87,7 +93,7 @@ public class RankHistoryManager {
     // ── Write Operations ───────────────────────────────────────────────────────
 
     /**
-     * Records a new rank history entry.
+     * Asynchronously records a new rank history entry, shielding the main thread from disk latency.
      */
     public void record(RankHistoryEntry entry) {
         if (entry == null) return;
@@ -100,36 +106,40 @@ public class RankHistoryManager {
             return;
         }
 
-        lock.lock();
-        try {
-            String path = "players." + entry.playerUuid() + ".entries";
-            List<Map<?, ?>> entries = loadRawEntries(entry.playerUuid().toString());
+        // Fetch configuration value on the calling thread safely to avoid async config access warnings
+        int rawMax = plugin.getConfig().getInt("experience.history-max-entries", 50);
+        int max = Math.max(1, rawMax);
 
-            // Duplicate check execution
-            if (isDuplicate(entries, entry)) {
-                return;
+        historyExecutor.submit(() -> {
+            lock.lock();
+            try {
+                String path = "players." + entry.playerUuid() + ".entries";
+                List<Map<?, ?>> entries = loadRawEntries(entry.playerUuid().toString());
+
+                // Duplicate check execution
+                if (isDuplicate(entries, entry)) {
+                    return;
+                }
+
+                // LinkedHashMap ensures order preservation inside sequential text structures
+                Map<String, Object> map = new LinkedHashMap<>();
+                map.put("from",      entry.fromRankId());
+                map.put("to",        entry.toRankId());
+                map.put("type",      entry.type().name());
+                map.put("timestamp", entry.timestamp());
+                map.put("name",      entry.playerName() != null ? entry.playerName() : "Unknown");
+                entries.add(map);
+
+                while (entries.size() > max) {
+                    entries.remove(0);
+                }
+
+                cachedYaml.set(path, entries);
+                saveConfig();
+            } finally {
+                lock.unlock();
             }
-
-            // LinkedHashMap ensures order preservation inside sequential text structures
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("from",      entry.fromRankId());
-            map.put("to",        entry.toRankId());
-            map.put("type",      entry.type().name());
-            map.put("timestamp", entry.timestamp());
-            map.put("name",      entry.playerName() != null ? entry.playerName() : "Unknown");
-            entries.add(map);
-
-            int max = plugin.getConfig().getInt("experience.history-max-entries", 50);
-            max = Math.max(1, max);
-            while (entries.size() > max) {
-                entries.remove(0);
-            }
-
-            cachedYaml.set(path, entries);
-            saveConfig();
-        } finally {
-            lock.unlock();
-        }
+        });
     }
 
     // ── Read Operations ────────────────────────────────────────────────────────
@@ -153,7 +163,7 @@ public class RankHistoryManager {
 
             Collections.reverse(result);
             return result;
-        } finally { // BUG FIX: Corrected from 'military'
+        } finally {
             lock.unlock();
         }
     }
@@ -277,5 +287,20 @@ public class RankHistoryManager {
 
     private boolean isNullOrBlank(String s) {
         return s == null || s.isBlank() || "null".equalsIgnoreCase(s);
+    }
+
+    /**
+     * Cleanly shuts down the asynchronous history worker queue.
+     */
+    public void shutdown() {
+        historyExecutor.shutdown();
+        try {
+            if (!historyExecutor.awaitTermination(3, TimeUnit.SECONDS)) {
+                historyExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            historyExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 }

@@ -20,14 +20,14 @@ import java.util.logging.Level;
  */
 public class DatabaseManager {
 
-    private final RankForge          plugin;
+    private final RankForge plugin;
     private volatile HikariDataSource dataSource;
-    private volatile boolean         available = false;
-    private volatile boolean         recovering = false;
-    private volatile boolean         mysqlConfigured = false;
-    private volatile boolean         fallbackMessageLogged = false;
-    private volatile String          lastLoggedOperationFailure;
-    private final Object             connectionLock = new Object();
+    private volatile boolean available = false;
+    private volatile boolean recovering = false;
+    private volatile boolean mysqlConfigured = false;
+    private volatile boolean fallbackMessageLogged = false;
+    private volatile String lastLoggedOperationFailure;
+    private final Object connectionLock = new Object();
 
     public DatabaseManager(RankForge plugin) {
         this.plugin = plugin;
@@ -38,8 +38,8 @@ public class DatabaseManager {
      * Never throws.
      */
     public boolean connect() {
-        FileConfiguration cfg     = plugin.getConfig();
-        String            cfgType = cfg.getString("database.type", "mysql").toLowerCase();
+        FileConfiguration cfg = plugin.getConfig();
+        String cfgType = cfg.getString("database.type", "mysql").toLowerCase();
         this.mysqlConfigured = cfgType.equals("mysql");
 
         if (mysqlConfigured) {
@@ -51,19 +51,21 @@ public class DatabaseManager {
     }
 
     private boolean tryMySQL(FileConfiguration cfg, boolean isRecoveryAttempt) {
-        String host     = cfg.getString("database.host",     "localhost");
-        int    port     = cfg.getInt("database.port",        3306);
-        String dbName   = cfg.getString("database.name",     "rankforge");
-        String user     = cfg.getString("database.user",     "root");
+        String host = cfg.getString("database.host", "localhost");
+        int port = cfg.getInt("database.port", 3306);
+        String dbName = cfg.getString("database.name", "rankforge");
+        String user = cfg.getString("database.user", "root");
         String password = cfg.getString("database.password", "password");
-        int    poolSize = cfg.getInt("database.pool-size",   10);
-        long   timeout  = cfg.getLong("database.timeout",    5000);
+        int poolSize = cfg.getInt("database.pool-size", 10);
+        long timeout = cfg.getLong("database.timeout", 5000);
 
         String jdbcUrl = "jdbc:mysql://" + host + ":" + port + "/" + dbName
                 + "?useSSL=false&allowPublicKeyRetrieval=true&autoReconnect=false&characterEncoding=utf8&serverTimezone=UTC";
 
         synchronized (connectionLock) {
-            if (isConnected()) return true;
+            if (isConnected()) {
+                return true;
+            }
 
             // Ensure MySQL JDBC driver class is loaded into memory
             String driverClass = "com.mysql.cj.jdbc.Driver";
@@ -123,16 +125,17 @@ public class DatabaseManager {
                 config.setInitializationFailTimeout(1); // Fail fast instead of blocking startup thread
                 config.setPoolName("RankForge-MySQL");
                 
-                config.addDataSourceProperty("cachePrepStmts",        "true");
-                config.addDataSourceProperty("prepStmtCacheSize",     "250");
+                config.addDataSourceProperty("cachePrepStmts", "true");
+                config.addDataSourceProperty("prepStmtCacheSize", "250");
                 config.addDataSourceProperty("prepStmtCacheSqlLimit", "2048");
 
                 dataSource = new HikariDataSource(config);
-                available  = true;
+                available = true;
 
                 // Initialize database tables/schema safely
                 new MySQLProvider(this).createTables();
 
+                // Reset error suppression trackers on successful connection
                 fallbackMessageLogged = false;
                 lastLoggedOperationFailure = null;
 
@@ -156,7 +159,9 @@ public class DatabaseManager {
 
     public boolean reconnect() {
         synchronized (connectionLock) {
-            if (!mysqlConfigured || isConnected()) return isConnected();
+            if (!mysqlConfigured || isConnected()) {
+                return isConnected();
+            }
             boolean connected = tryMySQL(plugin.getConfig(), true);
             if (connected) {
                 recovering = true;
@@ -181,6 +186,7 @@ public class DatabaseManager {
         synchronized (connectionLock) {
             if (available && dataSource != null && !dataSource.isClosed()) {
                 recovering = false;
+                plugin.getLogger().info("MySQL recovery completed successfully. Resuming database operations.");
             }
         }
     }
@@ -205,14 +211,18 @@ public class DatabaseManager {
 
         String fingerprint = cause.getClass().getName() + ":" + cause.getMessage();
         synchronized (connectionLock) {
-            if (fingerprint.equals(lastLoggedOperationFailure)) return;
+            if (fingerprint.equals(lastLoggedOperationFailure)) {
+                return;
+            }
             lastLoggedOperationFailure = fingerprint;
             plugin.getLogger().log(Level.WARNING, message, cause);
         }
     }
 
     private void logMySQLUnavailable() {
-        if (fallbackMessageLogged) return;
+        if (fallbackMessageLogged) {
+            return;
+        }
         plugin.getLogger().warning("MySQL unavailable. Falling back to YAML storage.");
         fallbackMessageLogged = true;
     }

@@ -4,6 +4,7 @@ import com.joshuaop.rankforge.RankForge;
 
 import java.sql.*;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -28,6 +29,9 @@ public class RankDataRepository {
     
     // Dedicated asynchronous executor to prevent main-thread blocking during database operations
     private final ExecutorService saveExecutor = Executors.newSingleThreadExecutor(r -> new Thread(r, "RankForge-AsyncSave-Worker"));
+    
+    // Dedicated asynchronous executor for non-blocking player data loading (I/O)
+    private final ExecutorService ioExecutor = Executors.newCachedThreadPool(r -> new Thread(r, "RankForge-AsyncIO-Worker"));
 
     public RankDataRepository(RankForge plugin, CacheManager cache) {
         this.plugin = plugin;
@@ -40,14 +44,17 @@ public class RankDataRepository {
     }
 
     private Object getLock(UUID uuid) {
-        // Fix: Use Math.floorMod to correctly handle negative hash codes (e.g., Integer.MIN_VALUE)
+        // Use Math.floorMod to correctly handle negative hash codes (e.g., Integer.MIN_VALUE)
         return lockStripes[Math.floorMod(uuid.hashCode(), LOCK_COUNT)];
     }
 
+    /**
+     * Synchronously loads player data. (Used internally or for fallback scenarios).
+     */
     public PlayerData load(UUID uuid, String playerName) {
-        if (cache.contains(uuid)) {
-            PlayerData cached = cache.getRaw(uuid);
-            if (cached != null && cached.isValidFor(uuid)) return cached;
+        PlayerData cached = cache.getRaw(uuid);
+        if (cached != null && cached.isValidFor(uuid)) {
+            return cached;
         }
 
         if (db.isReadyForReads()) {
@@ -58,8 +65,7 @@ public class RankDataRepository {
                     return loaded;
                 }
 
-                // A successful, validated query with no row is a legitimate new
-                // player. It is safe to create a default, unlike a failed query.
+                // A successful, validated query with no row is a legitimate new player.
                 PlayerData created = makeDefault(uuid, playerName, true);
                 cache.put(uuid, created);
                 return created;
@@ -77,6 +83,19 @@ public class RankDataRepository {
         // There is no valid persisted record to preserve. Keep a new-player
         // default in memory only; it must not be written over an invalid file.
         return makeDefault(uuid, playerName, true);
+    }
+
+    /**
+     * Asynchronously loads player data. Checks the cache synchronously first;
+     * if absent, offloads blocking database/YAML I/O to a background worker thread.
+     */
+    public CompletableFuture<PlayerData> loadAsync(UUID uuid, String playerName) {
+        PlayerData cached = cache.getRaw(uuid);
+        if (cached != null && cached.isValidFor(uuid)) {
+            return CompletableFuture.completedFuture(cached);
+        }
+
+        return CompletableFuture.supplyAsync(() -> load(uuid, playerName), ioExecutor);
     }
 
     /**
@@ -272,8 +291,11 @@ public class RankDataRepository {
             
             conn.setAutoCommit(false);
             try {
+                int validCount = 0;
                 for (PlayerData data : players) {
-                    if (data == null || !data.isValidFor(data.uuid())) continue;
+                    if (data == null || !data.isValidFor(data.uuid())) {
+                        continue;
+                    }
                     ps.setString(1, data.uuid().toString());
                     ps.setString(2, data.playerName());
                     ps.setString(3, data.rankId());
@@ -284,7 +306,14 @@ public class RankDataRepository {
                     ps.setLong(8, data.playTime());
                     ps.setString(9, String.join(",", data.completedRequirements()));
                     ps.addBatch();
+                    validCount++;
                 }
+
+                if (validCount == 0) {
+                    conn.rollback();
+                    return false;
+                }
+
                 ps.executeBatch();
                 conn.commit();
                 return true;
@@ -335,12 +364,15 @@ public class RankDataRepository {
     private List<PlayerData> getTopPlayersFromCacheAndYaml(int limit) {
         Map<UUID, PlayerData> merged = new HashMap<>();
 
-        // 1. Load persisted records from YAML
+        // 1. Load persisted records from YAML safely
         YamlPlayerDataStorage yaml = plugin.getYamlPlayerDataStorage();
         if (yaml != null) {
-            for (PlayerData p : yaml.loadAll()) {
-                if (p != null && p.isValidFor(p.uuid())) {
-                    merged.put(p.uuid(), p);
+            Collection<PlayerData> yamlPlayers = yaml.loadAll();
+            if (yamlPlayers != null) {
+                for (PlayerData p : yamlPlayers) {
+                    if (p != null && p.isValidFor(p.uuid())) {
+                        merged.put(p.uuid(), p);
+                    }
                 }
             }
         }
@@ -398,16 +430,21 @@ public class RankDataRepository {
     }
 
     /**
-     * Cleanly shuts down the asynchronous save queue.
+     * Cleanly shuts down asynchronous save and load executors.
      */
     public void shutdown() {
         saveExecutor.shutdown();
+        ioExecutor.shutdown();
         try {
             if (!saveExecutor.awaitTermination(3, TimeUnit.SECONDS)) {
                 saveExecutor.shutdownNow();
             }
+            if (!ioExecutor.awaitTermination(3, TimeUnit.SECONDS)) {
+                ioExecutor.shutdownNow();
+            }
         } catch (InterruptedException e) {
             saveExecutor.shutdownNow();
+            ioExecutor.shutdownNow();
             Thread.currentThread().interrupt();
         }
     }

@@ -24,13 +24,13 @@ import java.util.logging.Level;
  */
 public class SyncService {
 
-    private final RankForge     plugin;
-    private BukkitTask          task;
-    private BukkitTask          recoveryTask;
+    private final RankForge plugin;
+    private BukkitTask task;
+    private BukkitTask recoveryTask;
     private final AtomicBoolean recoveryInProgress = new AtomicBoolean(false);
-    private final Object        recoveryTaskLock = new Object();
-    private volatile long       nextRecoveryAttemptAtMillis;
-    private volatile long       recoveryBackoffTicks;
+    private final Object recoveryTaskLock = new Object();
+    private volatile long nextRecoveryAttemptAtMillis;
+    private volatile long recoveryBackoffTicks;
 
     public SyncService(RankForge plugin) {
         this.plugin = plugin;
@@ -43,7 +43,9 @@ public class SyncService {
             return;
         }
 
-        if (task != null && !task.isCancelled()) return;
+        if (task != null && !task.isCancelled()) {
+            return;
+        }
         long interval = plugin.getConfig().getLong("sync.interval-ticks", 200L);
 
         // Snapshot live Bukkit state on the main thread. Only immutable
@@ -56,7 +58,9 @@ public class SyncService {
 
             CacheManager cache = getCache();
             RankDataRepository repo = getRepository();
-            if (cache == null || repo == null) return;
+            if (cache == null || repo == null) {
+                return;
+            }
 
             // Flush live counters on main thread before saving snapshots
             if (plugin.getBlockBreakTracker() != null) {
@@ -68,7 +72,9 @@ public class SyncService {
             }
 
             var snapshots = cache.snapshotOnlineAndUnexpired();
-            if (snapshots.isEmpty()) return;
+            if (snapshots.isEmpty()) {
+                return;
+            }
 
             // Execute database save operations asynchronously
             plugin.getTaskScheduler().async(() -> {
@@ -92,9 +98,13 @@ public class SyncService {
      */
     public void startRecoveryMonitor() {
         synchronized (recoveryTaskLock) {
-            if (recoveryTask != null && !recoveryTask.isCancelled()) return;
+            if (recoveryTask != null && !recoveryTask.isCancelled()) {
+                return;
+            }
             DatabaseManager db = plugin.getDatabaseManager();
-            if (db == null || !db.isMysqlConfigured()) return;
+            if (db == null || !db.isMysqlConfigured()) {
+                return;
+            }
 
             long interval = Math.max(200L, plugin.getConfig().getLong("sync.interval-ticks", 200L) * 3L);
             recoveryBackoffTicks = interval;
@@ -104,13 +114,19 @@ public class SyncService {
     }
 
     private void attemptMySQLRecovery() {
-        if (!recoveryInProgress.compareAndSet(false, true)) return;
+        if (!recoveryInProgress.compareAndSet(false, true)) {
+            return;
+        }
         try {
             DatabaseManager db = plugin.getDatabaseManager();
-            if (db == null || db.isConnected()) return;
+            if (db == null || db.isConnected()) {
+                return;
+            }
 
             long now = System.currentTimeMillis();
-            if (now < nextRecoveryAttemptAtMillis) return;
+            if (now < nextRecoveryAttemptAtMillis) {
+                return;
+            }
 
             if (!db.reconnect()) {
                 scheduleRecoveryRetry(now);
@@ -241,7 +257,9 @@ public class SyncService {
     public void flushNow() {
         CacheManager cache = getCache();
         RankDataRepository repo = getRepository();
-        if (cache == null || repo == null) return;
+        if (cache == null || repo == null) {
+            return;
+        }
 
         if (plugin.getBlockBreakTracker() != null) {
             plugin.getBlockBreakTracker().flushAll();

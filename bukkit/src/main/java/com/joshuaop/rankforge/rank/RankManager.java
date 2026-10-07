@@ -57,6 +57,14 @@ public class RankManager {
     }
 
     /**
+     * Asynchronously loads player data, checking the cache first and offloading
+     * database/YAML I/O to a background worker if absent.
+     */
+    public CompletableFuture<PlayerData> loadPlayerAsync(UUID uuid, String playerName) {
+        return repository.loadAsync(uuid, playerName);
+    }
+
+    /**
      * Flushes all cached player data during server shutdown using an asynchronous
      * batch save with a strict bounded timeout.
      *

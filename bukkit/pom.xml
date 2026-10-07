@@ -7,7 +7,7 @@
 
     <groupId>com.joshuaop.rankforge</groupId>
     <artifactId>RankForge</artifactId>
-    <version>3.8-DEV</version>
+    <version>3.8</version>
     <packaging>jar</packaging>
 
     <name>RankForge</name>
@@ -80,7 +80,7 @@
         <dependency>
             <groupId>com.mysql</groupId>
             <artifactId>mysql-connector-j</artifactId>
-            <version>8.3.0</version>
+            <version>9.2.0</version>
             <scope>compile</scope>
         </dependency>
 
@@ -115,7 +115,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>3.5.3</version>
+                <version>3.6.2</version>
                 <executions>
                     <execution>
                         <phase>package</phase>
