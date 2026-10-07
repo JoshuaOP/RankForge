@@ -186,12 +186,18 @@ public final class RankForge extends JavaPlugin {
         rankManager = new RankManager(this);
         rankManager.loadRanks();
 
+<<<<<<< HEAD
         // Only preload YAML into cache if MySQL is inactive/unavailable.
         // When MySQL is healthy, skip preloading to prevent stale YAML data from overriding fresh database records.
         boolean isMySqlActive = databaseManager != null && databaseManager.isReadyForReads();
 
         if (!isMySqlActive && yamlPlayerDataStorage != null) {
             getLogger().info("MySQL is inactive or unavailable. Loading player data from YAML fallback...");
+=======
+        // Warm up cache from local YAML records only if MySQL is not connected/active
+        boolean mysqlActive = databaseManager != null && databaseManager.isConnected();
+        if (!mysqlActive && yamlPlayerDataStorage != null) {
+>>>>>>> main
             var stored = yamlPlayerDataStorage.loadAll();
             if (stored != null) {
                 for (var pd : stored) {

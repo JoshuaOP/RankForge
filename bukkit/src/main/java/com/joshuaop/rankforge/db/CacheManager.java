@@ -46,7 +46,16 @@ public class CacheManager {
     // ── Write ─────────────────────────────────────────────────────────────────
 
     public void put(UUID id, PlayerData data) {
+        put(id, data, true);
+    }
+
+    /**
+     * Explicit state control to prevent background, offline, or bulk-loaded records
+     * from incorrectly claiming active online session locks.
+     */
+    public void put(UUID id, PlayerData data, boolean activeOnline) {
         if (id == null || data == null || !data.isValidFor(id)) return;
+<<<<<<< HEAD
         boolean online = isPlayerOnline(id);
         cache.put(id, new Entry(data, System.currentTimeMillis() + ttlMs, online));
     }
@@ -60,6 +69,9 @@ public class CacheManager {
         if (id == null) return false;
         Player player = Bukkit.getPlayer(id);
         return player != null && player.isOnline();
+=======
+        cache.put(id, new Entry(data, System.currentTimeMillis() + ttlMs, activeOnline));
+>>>>>>> main
     }
 
     /**
@@ -78,6 +90,13 @@ public class CacheManager {
     }
 
     public void putAll(Map<UUID, PlayerData> map) {
+        putAll(map, true);
+    }
+
+    /**
+     * Bulk insert map with controlled online-state enforcement.
+     */
+    public void putAll(Map<UUID, PlayerData> map, boolean activeOnline) {
         if (map == null || map.isEmpty()) return;
         long now = System.currentTimeMillis();
         long exp = now + ttlMs;
@@ -98,9 +117,13 @@ public class CacheManager {
         long exp = System.currentTimeMillis() + ttlMs;
         map.forEach((k, v) -> {
             if (k != null && v != null && v.isValidFor(k)) {
+<<<<<<< HEAD
                 // If requested activeOnline is true, double check if they are actually online
                 boolean online = activeOnline && isPlayerOnline(k);
                 cache.put(k, new Entry(v, exp, online));
+=======
+                cache.put(k, new Entry(v, exp, activeOnline));
+>>>>>>> main
             }
         });
     }

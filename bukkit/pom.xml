@@ -7,7 +7,11 @@
 
     <groupId>com.joshuaop.rankforge</groupId>
     <artifactId>RankForge</artifactId>
+<<<<<<< HEAD
     <version>3.8</version>
+=======
+    <version>3.8-DEV</version>
+>>>>>>> main
     <packaging>jar</packaging>
 
     <name>RankForge</name>
